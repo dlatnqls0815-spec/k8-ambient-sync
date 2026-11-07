@@ -13,6 +13,8 @@ K8 순정 SML 로그와 LotusLamp X의 BLE 색상·밝기 쓰기를 각각 실�
 
 ## 재개와 실행
 
+Claude에서 이어갈 때는 [현재 인수인계](docs/CLAUDE_HANDOFF.md)를 먼저 읽는다.
+
 `AGENTS.md` → [진행 상황](docs/PROGRESS.md) → [결정 기록](docs/DECISIONS.md)을 읽는다.
 기본 검사는 Python 3.9+와 JDK 8이 필요하다. 외부 Python/Java 라이브러리는 사용하지 않는다.
 
