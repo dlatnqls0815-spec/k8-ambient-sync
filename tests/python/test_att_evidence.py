@@ -69,6 +69,21 @@ class AttEvidenceTest(unittest.TestCase):
                 self.assertEqual(1, report["counts"]["unknown_count"])
                 self.assertEqual([], report["candidate_events"])
 
+    def test_capture_preparation_rgb_and_lotus_default_length_brightness(self):
+        # Synthetic builder-shaped vectors, not captured target-device packets.
+        rgb = ["7e070503ff000010ef", "7e07050300ff0010ef", "7e0705030000ff10ef"]
+        brightness = ["7e0401" + value + "00ff0000ef" for value in ("19", "32", "4b")]
+        packets = rgb + brightness + ["8e020119"]
+        report = evidence.analyze_tsv(tsv(*[
+            row(**{"frame.number": str(10 + i), "frame.time_relative": str(i * 5),
+                   "btatt.value": value}) for i, value in enumerate(packets)]))
+        colors = [event["candidate"] for event in report["candidate_events"]]
+        self.assertEqual([(255, 0, 0), (0, 255, 0), (0, 0, 255)],
+                         [(c["red"], c["green"], c["blue"]) for c in colors])
+        self.assertEqual(4, report["counts"]["unknown_count"])
+        self.assertFalse(report["protocol_verified"])
+        self.assertNotIn("percent", json.dumps(report))
+
     def test_unknown_payload_is_never_copied_into_report(self):
         secret = "SYNTHETIC_PRIVATE_TOKEN"
         encoded = secret.encode().hex()

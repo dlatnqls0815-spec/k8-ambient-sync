@@ -1,0 +1,9 @@
+step,action,app_value,observed_response,local_time_note,capture_relative_seconds
+0,connected_wait_5s,,,,
+1,red,,,,
+2,green,,,,
+3,blue,,,,
+4,brightness_low,,,,
+5,brightness_middle,,,,
+6,brightness_high,,,,
+7,restore_original,,,,

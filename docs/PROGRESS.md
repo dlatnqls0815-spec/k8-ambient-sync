@@ -3,6 +3,29 @@
 기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **Galaxy 실제 앱 확인 / 실차 통신 기록 대기**다.
 실제 차량에서 동작하는 완성품 또는 배포용 모듈을 만든 상태는 아니다.
 
+## 후속 진단 준비 — 2026-11-07
+
+- 사용자 지정 `codex/device-evidence` / `ec12e13`에서 이어서 작업했다.
+  이 채팅의 엔진사운드 작업보다 본 엠비언트 진단을 우선한다.
+- 기존 `phone_probe.py`/`att_evidence.py`의 명령과 제한을 재사용했다.
+  RGB 후보 3색은 구분 가능하다. 설치본 E1 기본 길이 `04` 밝기, E2, 암호화는 현재 후보 decoder에서
+  미확인으로 남는 것을 합성 검사로 명시했다. 실제 HCI와 동작 시각표가 있어야 대상 분기를 판단한다.
+- `k8_probe.py`를 추가했다. 이미 허용된 ADB에서 한국 K8/API19를 먼저 확인하고 고정 속성·BLE 선언·
+  HMG 앱 버전·enable 마커와 **이미 있는** map-check의 요약만 읽는다. root/engine 명령은 없다.
+  원본 오류/JSON·장치 serial을 저장하지 않고 결과를 private에 제한한다.
+  과거 map-check/마커와 현재 runtime Hook·ambient 수신을 구별하며 후자는 계속 미확인이다.
+- `CAPTURE_SESSION.md`와 빈 조작 기록표를 추가했다. 차에서는 버전·기존 상태 화면을 먼저 기록하고,
+  Galaxy에서는 연결 전 HCI 시작 → 3색 → 밝기 3단계 → 복원 → 비공개 보고서 → 로깅 복원의 순서다.
+- 새 Python 검사 포함 41개 중 **40개 통과/1개 skip**, passive 메타데이터와 diff 공백 검사 통과.
+  skip은 기존 Windows 디렉터리 symlink 권한 제한이다. Java/Hook 코드는 바꾸지 않아 기존 179개와
+  API19 계약 컴파일은 재실행하지 않았다.
+- 이 PC에서는 TShark가 없어 실제 HCI→TSV 실행을 검증하지 못했다. AOSP HCI와 Wireshark ACL 공식
+  문서, HMG-API 1.0.2 고정 커밋의 map-check/enable 경로만 필요한 범위로 확인했다.
+- 차량·조명 접속, 실제 BLE 송신·스캔, root·설치·시스템 변경은 하지 않았다.
+  갤럭시/차량 자료 원본이나 계정·키를 외부로 전송하지 않았다.
+- 저장소가 지정한 MiniMax skill 파일은 이 PC에 없어 외부 자문을 실행하지 않고 Codex가 직접 검토했다.
+- 변경은 같은 기능 브랜치에 커밋·Push한다. main 병합·강제 Push는 하지 않는다.
+
 ## 완료
 - 빈 로컬 Git 폴더와 기준 GitHub 저장소를 확인했다. 원격은 private=true, size=0, default_branch=main이었다.
   첫 세션에서는 사용자 선택에 따라 로컬 작업만 진행했다.

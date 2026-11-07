@@ -6,6 +6,8 @@
 차량 설치 및 시스템 수정은 별도 사용자 확인 후 진행한다.
 
 자료 수집·로컬 분석 명령은 [EVIDENCE_TOOLS](EVIDENCE_TOOLS.md)를 참조한다.
+다음 실차 방문의 최소 순서와 작성용 기록표는 [CAPTURE_SESSION](CAPTURE_SESSION.md)에 있다.
+이번 수집에서는 기존 map-check만 읽는다. `verify-map`/`report`/`map-car`를 새로 실행하지 않는다.
 
 ## 1. 최소 준비 자료
 

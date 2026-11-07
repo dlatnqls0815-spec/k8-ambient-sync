@@ -60,3 +60,15 @@ ATT 도구는 합성 TSV로 정확한 후보 형식·입력 범위·다중 occur
 별도의 수동 검증으로 Galaxy 무선 연결 후 고정 패키지의 실제 OS/버전 정보를 읽었다.
 이 성공은 실차 컨트롤러의 프로토콜·연결·실제 조명 반영을 증명하지 않는다.
 현재 실제 HCI export가 없어 TShark→실측 TSV 전체 경로는 아직 검증하지 않았다.
+
+## 후속 진단 준비 검사 — 2026-11-07
+
+`python -m unittest discover -s tests/python -p "test_*.py" -v`:
+41개 중 40개 통과, 기존 Windows 디렉터리 symlink 권한 검사 1개 skip.
+새 K8 모의 ADB 검사는 대상 기기 제한, 고정 읽기 명령, 비공개 정보 비출력,
+권한 부족의 unknown 처리, 과거 map-check와 runtime Hook 구분, 잘못된 요약 거부를 확인했다.
+RGB 3색과 Lotus 기본 길이 밝기/E2 합성 입력으로 현재 decoder의 지원 범위를 명시했다.
+passive 메타데이터·Git diff 공백 검사도 통과했다.
+
+Java와 Android Hook 코드는 변경하지 않아 기존 179개/실제 API19 계약 컴파일 결과를 재사용했다.
+TShark가 이 PC에 없고 실측 캡처가 없어 실제 파이프라인·기기 동작은 검사하지 않았다.
