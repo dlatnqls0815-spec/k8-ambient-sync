@@ -52,7 +52,7 @@ public final class HostTestMain {
             StateFile.save(file, first);
             check(first.equals(StateFile.load(file)), "State survives a fresh read");
             MockTransport mock = new MockTransport();
-            SyncEngine restarted = new SyncEngine(mock);
+            SyncEngine restarted = new SyncEngine(mock, 100);
             restarted.onState(StateFile.load(file));
             restarted.tick(0);
             check(mock.writes == 0 && !mock.connected, "Restoring a file never enables synchronization");

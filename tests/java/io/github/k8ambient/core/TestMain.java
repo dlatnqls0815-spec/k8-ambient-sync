@@ -140,7 +140,7 @@ public final class TestMain {
 
     private static void deduplicationAndCoalescing() {
         MockTransport mock = new MockTransport();
-        SyncEngine engine = new SyncEngine(mock);
+        SyncEngine engine = new SyncEngine(mock, 100);
         engine.onState(state(10, 50, true));
         engine.tick(0);
         check(mock.connects == 0 && mock.writes.isEmpty(), "disabled by default");
@@ -181,7 +181,7 @@ public final class TestMain {
 
     private static void powerAndReconnect() {
         MockTransport mock = new MockTransport();
-        SyncEngine engine = new SyncEngine(mock);
+        SyncEngine engine = new SyncEngine(mock, 100);
         engine.onState(state(10, 50, false));
         engine.setEnabled(true);
         engine.tick(0);
@@ -208,7 +208,7 @@ public final class TestMain {
 
     private static void reentrantInputUsesPacketSnapshot() {
         MockTransport mock = new MockTransport();
-        final SyncEngine engine = new SyncEngine(mock);
+        final SyncEngine engine = new SyncEngine(mock, 100);
         engine.onState(state(10, 50, true));
         engine.setEnabled(true);
         engine.tick(0);
@@ -222,7 +222,7 @@ public final class TestMain {
 
     private static void continuousUpdatesDoNotStarveEitherField() {
         MockTransport mock = new MockTransport();
-        SyncEngine engine = new SyncEngine(mock);
+        SyncEngine engine = new SyncEngine(mock, 100);
         engine.onState(state(0, 20, true));
         engine.setEnabled(true);
         engine.tick(0);
@@ -244,7 +244,7 @@ public final class TestMain {
 
     private static void failuresAndBackoff() {
         MockTransport mock = new MockTransport();
-        SyncEngine engine = new SyncEngine(mock);
+        SyncEngine engine = new SyncEngine(mock, 100);
         engine.onState(state(10, 50, true));
         engine.setEnabled(true);
         engine.tick(0);
@@ -262,7 +262,7 @@ public final class TestMain {
 
         MockTransport unavailable = new MockTransport();
         unavailable.failedConnects = 20;
-        SyncEngine retry = new SyncEngine(unavailable);
+        SyncEngine retry = new SyncEngine(unavailable, 100);
         retry.onState(state(1, 1, true));
         retry.setEnabled(true);
         long[] due = {0, 100, 300, 700, 1500, 3100, 6300, 11300, 16300};
@@ -276,7 +276,7 @@ public final class TestMain {
 
         MockTransport repeated = new MockTransport();
         repeated.failEveryWrite = true;
-        SyncEngine failedWrites = new SyncEngine(repeated);
+        SyncEngine failedWrites = new SyncEngine(repeated, 100);
         failedWrites.onState(state(1, 1, true));
         failedWrites.setEnabled(true);
         failedWrites.tick(0);
@@ -291,7 +291,7 @@ public final class TestMain {
 
         MockTransport silent = new MockTransport();
         silent.silentConnect = true;
-        SyncEngine silentEngine = new SyncEngine(silent);
+        SyncEngine silentEngine = new SyncEngine(silent, 100);
         silentEngine.onState(state(1, 1, true));
         silentEngine.setEnabled(true);
         silentEngine.tick(0);
@@ -300,6 +300,8 @@ public final class TestMain {
 
     private static void invalidInputsAndClock() {
         rejects(new Action() { public void run() { new SyncEngine(null); } });
+        rejects(new Action() { public void run() { new SyncEngine(new MockTransport(), -1); } });
+        rejects(new Action() { public void run() { new SyncEngine(new MockTransport(), 101); } });
         final SyncEngine engine = new SyncEngine(new MockTransport());
         rejects(new Action() { public void run() { engine.onState(null); } });
         rejects(new Action() { public void run() { engine.tick(-1); } });
@@ -307,15 +309,40 @@ public final class TestMain {
         rejects(new Action() { public void run() { engine.tick(99); } });
         engine.tick(100);
         MockTransport mock = new MockTransport();
-        SyncEngine noState = new SyncEngine(mock);
+        SyncEngine noState = new SyncEngine(mock, 100);
         noState.setEnabled(true);
         noState.tick(0);
         check(mock.connects == 0 && mock.writes.isEmpty(), "no state means no connection");
     }
 
+    private static void userBrightnessCalibration() {
+        MockTransport mock = new MockTransport();
+        SyncEngine engine = new SyncEngine(mock);
+        engine.onState(state(10, 0, true));
+        engine.setEnabled(true);
+        engine.tick(0);
+        engine.tick(50);
+        engine.tick(100);
+        check(mock.command(0).on && mock.command(2).brightness == 0, "zero brightness is not power off");
+        int[] input = {25, 50, 75, 100};
+        int[] expected = {5, 10, 15, 20};
+        for (int i = 0; i < input.length; i++) {
+            engine.onState(state(10, input[i], true));
+            engine.tick(150 + i * 50);
+            check(mock.command(3 + i).brightness == expected[i], "calibrated brightness " + input[i]);
+        }
+        engine.onState(state(10, 99, true));
+        engine.tick(350);
+        check(mock.writes.size() == 7, "equivalent calibrated outputs are deduplicated");
+        engine.onState(state(10, 100, false));
+        engine.tick(400);
+        check(!mock.command(7).on, "power remains separate from brightness");
+    }
+
     public static void main(String[] args) {
         stateAndRawStatus();
         packets();
+        userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();
         reentrantInputUsesPacketSnapshot();

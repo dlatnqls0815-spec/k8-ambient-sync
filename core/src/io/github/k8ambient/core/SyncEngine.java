@@ -16,6 +16,7 @@ public final class SyncEngine {
     }
 
     private final Transport transport;
+    private final int maximumBrightness;
     private AmbientState desired;
     private boolean enabled, hadConnection, lastDataWasColor;
     private Boolean sentOn;
@@ -24,8 +25,15 @@ public final class SyncEngine {
     private long successfulWrites, connectionAttempts, failures;
 
     public SyncEngine(Transport transport) {
+        this(transport, 20);
+    }
+
+    /** The maximum is an app percentage; the default 20 is an unverified user calibration. */
+    public SyncEngine(Transport transport, int maximumBrightness) {
         if (transport == null) throw new IllegalArgumentException("Transport is required");
+        AmbientState.checkRange(maximumBrightness, 100);
         this.transport = transport;
+        this.maximumBrightness = maximumBrightness;
     }
 
     public void onState(AmbientState state) {
@@ -77,6 +85,8 @@ public final class SyncEngine {
         if (lastAttempt >= 0 && monotonicMillis - lastAttempt < 50) return;
 
         AmbientState target = desired;
+        // The input must already be normalized; this is not a K8 raw-value conversion.
+        int targetBrightness = (target.brightness * maximumBrightness + 50) / 100;
         boolean colorPending = sentRed != target.red || sentGreen != target.green || sentBlue != target.blue;
         byte[] packet;
         int field;
@@ -85,9 +95,9 @@ public final class SyncEngine {
             field = 0;
         } else if (!target.on) {
             return;
-        } else if (sentBrightness != target.brightness && (lastDataWasColor || !colorPending)) {
+        } else if (sentBrightness != targetBrightness && (lastDataWasColor || !colorPending)) {
             // Alternate pending data fields so continuous RGB updates cannot starve brightness.
-            packet = WporterE1Candidate.brightness(target.brightness);
+            packet = WporterE1Candidate.brightness(targetBrightness);
             field = 2;
         } else if (colorPending) {
             packet = WporterE1Candidate.color(target.red, target.green, target.blue);
@@ -115,7 +125,7 @@ public final class SyncEngine {
                 sentBlue = target.blue;
             } else {
                 lastDataWasColor = false;
-                sentBrightness = target.brightness;
+                sentBrightness = targetBrightness;
             }
         } catch (IOException ignored) {
             failed(monotonicMillis);
