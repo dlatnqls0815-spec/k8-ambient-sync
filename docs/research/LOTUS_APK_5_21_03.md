@@ -49,7 +49,7 @@ E1에는 boolean 조건과 명령 종류에 따라 암호화 전처리 후
 |---|---|---|
 | `sendRGBColor(int,int,int,ELKPaletteType)`에서 일반 RGB palette, 평문 E1 선택 | `7E 07 05 03 RR GG BB 10 EF` 형식과 일치 | `0x384c84`; payload 배치 `0x384d40`–`0x384d7e` |
 | `brightness(int,ELKLampType)`의 일반 경로 | payload는 입력 byte·lamp type·`FF`·appType·appVersion. 길이는 기본 `04` 또는 device별 override | `0x37cd3c`; 일반 경로 `0x37cdda`–`0x37ce3a` |
-| `rgbOpen(boolean)`의 일반 경로 | payload 첫 값은 ON=`FF`/OFF=`00`; 다음 두 값은 `00`와 전원 boolean; 이후 appType·appVersion | `0x383034`; 배치 `0x383054`–`0x3830aa` |
+| `rgbOpen(boolean)`의 일반 경로 | payload 첫 값은 ON=`FF`/OFF=`00`; 다음 두 값은 상수 `01`과 전원 boolean; 이후 appType·appVersion (2026-11-07 재확인으로 `00`→`01` 정정, [PC 재분석](PC_ANALYSIS_2026-11-07.md)) | `0x383034`; 배치 `0x383054`–`0x3830aa` |
 
 enum 초기화에서도 COLOR=`05`, BRIGHTNESS=`01`, ON_OFF=`04`, RGB palette=`03`을 확인했다.
 `AppConstant$ElkCMD.<clinit>`의 code_item은 `0x337edc`,
