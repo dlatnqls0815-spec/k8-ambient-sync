@@ -172,6 +172,21 @@ public final class TestMain {
         check(mock.command(3).brightness == 20, "K8 maximum becomes mock aftermarket 20 percent");
     }
 
+    /** Status bytes copied from the 2026-11-07 K8 SML captures (no identifiers). */
+    private static void k8CapturedStatusesUnderOffLadderCandidate() {
+        final byte[] dreamPurpleOff = {1, 0x6b, 1, 0x5a, 1, (byte) 0x95, 1, 1, 1};
+        byte[] customPurpleMax = {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 11, 1, 1};
+        byte[] customPurpleLevel1 = {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 2, 1, 1};
+        AmbientState max = SmlStatus.parse(customPurpleMax).toEv6ReferenceState();
+        check(max.equals(new AmbientState(0x9b, 0x21, 0xef, 100, true)), "captured custom color at raw 11");
+        check(SmlStatus.parse(customPurpleLevel1).toEv6ReferenceState().brightness == 10, "raw 2 is menu level 1");
+        check((SmlStatus.parse(customPurpleLevel1).toEv6ReferenceState().brightness * 20 + 50) / 100 == 2,
+                "menu level 1 becomes aftermarket 2 percent");
+        check(!SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 1, 1, 1})
+                .toEv6ReferenceState().on, "raw 1 is OFF under the candidate");
+        rejects(new Action() { public void run() { SmlStatus.parse(dreamPurpleOff).toEv6ReferenceState(); } });
+    }
+
     private static void observedLotusReplay() {
         MockTransport mock = new MockTransport();
         mock.acceptObservedLotus = true;
@@ -451,6 +466,7 @@ public final class TestMain {
         stateAndRawStatus();
         packets();
         k8ProvisionalBrightness();
+        k8CapturedStatusesUnderOffLadderCandidate();
         observedLotusReplay();
         lotusStaticPower();
         userBrightnessCalibration();

@@ -1,5 +1,15 @@
 # 진행 상황
 
+## 남은 PC 분석 마무리(Claude Code) — 2026-11-07 밤
+
+- baksmali로 OEM DEX를 다시 풀었다. `0x15E` 이름은 `SML_MOOD_FLOOR_MODE_THEM_BRIGHT`이고, SystemService는 mode/data·RGB를 해석 없이 전달한다.
+- raw1=OFF를 작업 기준으로 채택했다. 2차 1→2, 11칸 사다리, 응답 8·9바이트 불변, 상류 EV6 규칙이 근거다. 육안 소등만 남았다.
+  이 해석은 기존 `toEv6ReferenceState()`와 같다. 실제 K8 상태 3건 회귀 검사를 추가했다(코어 185→190).
+- 드림퍼플 복원도 `setSMLRGB` 경로다. 테마 재선택 현장 기록은 제외했다. 테마일 때 사제 색 정책 A/B/C는 사용자 선택으로 남겼다.
+- 최초 HCI에 전원 형식 쓰기는 0건이다. 설치 실패 원인은 PC 자료로 더 좁힐 수 없다.
+- `NEXT_PARKED_VISIT.md`를 최종 현장 확인표 5단계로 정리했다.
+- 검증: Python 81개 중 80 통과·1 skip, Java 코어190·host14·진단 모의37. `--diagnostic`은 HMG 소스 부재로 미실행.
+
 ## PC 재분석(Claude) — 2026-11-07
 
 - 차량·휴대폰 접속 없이 노트북 자료만 분석했다. [PC 재분석](research/PC_ANALYSIS_2026-11-07.md).
