@@ -25,6 +25,6 @@ Gen5W 직접 BLE(A) → Galaxy 중계(B) → 별도 장치(C) 순서로 검토�
 - HMG-API와 HMG-Seogaemo를 혼합 설치하지 않는다. 조사한 외부 스크립트를 실행하지 않는다.
 - VIN, 실제 장치 식별자, 인증/페어링 키, 원본 로그·펌웨어·바이너리는 커밋하지 않는다.
 - `.research/`, `.tools/`, `captures/`, `private/`, `work/`는 로컬 전용이다.
-- 외부 자문은 MiniMax만 허용. 필요 시 `C:/Users/samil/.codex/skills/minimax/SKILL.md`를 읽는다.
+- 외부 자문은 MiniMax만 허용. 필요 시 사용자 홈의 `.codex/skills/minimax/SKILL.md`를 읽는다.
   비밀/실제 로그/저장소 전체를 외부 AI에 보내지 않는다. Codex가 편집·검증·판단한다.
 - Codex 로그인, 모델, provider, MCP와 다른 프로젝트 설정을 변경하지 않는다.

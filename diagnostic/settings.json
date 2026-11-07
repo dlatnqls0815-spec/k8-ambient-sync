@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "settings": [
+    {
+      "key": "diagnostics",
+      "type": "toggle",
+      "default": false,
+      "title": "Passive SML diagnostics (restart required)",
+      "apply": "rebuild"
+    }
+  ]
+}

@@ -1,11 +1,44 @@
 # 테스트
 
 `python tools/check.py`로 코어 컴파일, assert 기반 동작 검사, 문서/메타데이터 검사를 실행한다.
-JDK 8+와 Python 3.9+ 외 의존성은 없다. 자세한 검사 결과는 PROGRESS에 기록한다.
+JDK 8과 Python 3.9+ 외 의존성은 없다. 자세한 검사 결과는 PROGRESS에 기록한다.
+
+2026-11-07 검증: 코어 **139**, host **14**, 진단 fake **26** = **179개 검사 통과**.
+코어는 golden 패킷·필드 손상·테마/unknown 밝기 거부·OFF·중복·최신값·부분 실패·재연결·
+재시도 상한·재진입 이벤트·연속 색상/밝기 변경을 검사한다.
+host는 파일 복원·원자 덮어쓰기·손상/과대 입력 거부·복원 후 disabled 유지를 검사한다.
+진단은 실제 수신기 코드를 fake Context/Handler 큐에서 실행해 수명·검증·최신 로그 병합을 검사한다.
+
+## Android 계약 컴파일
+
+```text
+python tools/check.py --diagnostic
+```
+
+현재 PC의 로컬 입력은 `.research/HMG-API`의 고정 커밋
+`180185de2c57afb2cca4858d0be7828e8f1051d6`과
+`.tools/android19/android-4.4.2/android.jar`다. 다른 경로는 `--hmg-source`, `--android-jar`로 지정한다.
+의존성을 자동 다운로드하거나 상류 빌드 스크립트를 실행하지 않는다.
+실제 Android API19를 bootclasspath로 사용해 코어/진단이 PC 전용 API를 참조하지 않는지 확인한다.
+HMG runtime/stubs도 실제 소스에서 컴파일하며 테스트 fake를 해당 classpath에 넣지 않는다.
+상류 runtime 컴파일에는 기존 unchecked cast/serial 경고 8개가 있다. 프로젝트 코어/진단은 경고 없이 컴파일됐다.
+DEX 변환·패키징·서명·차량 설치는 하지 않는다.
+
+JDK는 공식 Temurin 8.0.512+9 ZIP을 SHA-256 검증 후 `.tools/`에만 풀었다.
+Android API19 archive는 Google 공식 repository 메타데이터의 SHA-1과 대조했다.
+전역 PATH/JAVA_HOME/로그인 설정은 변경하지 않았다. 이 파일들은 저장소에 포함하지 않는다.
+다른 PC에는 JDK8을 준비하고 필요한 경우 공식 Android SDK의 API19 플랫폼을 별도로 준비한다.
+
+검사 출력은 이전 클래스가 성공을 가리지 않도록 매번 새 `build/check-*` 디렉터리에 만든다.
+`build/`는 Git에서 제외한다.
 
 실제 차량·Bluetooth 연결, APK/모듈 설치, CAN/LIN/Binder 요청은 실행하지 않는다.
 가상 이벤트·후보 패킷·모의 ACK·가상 시계만 사용한다.
 모의 연결 성공은 BLE 지원, 물리 조명 반영 또는 200ms 성능을 증명하지 않는다.
+
+독립 코드 검토에서 연속 RGB 변경이 밝기 전송을 영구 지연시키는 문제를 재현했다.
+실패하는 회귀검사를 먼저 확인한 뒤 공정 처리로 수정했고 전체 검사로 확인했다.
+연결 세션에서 바뀐 최신 상태를 이미 보냈다고 오인하지 않도록 전송 시점 상태 snapshot도 검사한다.
 
 실차 검증 순서는 펌웨어/복구/백업 확인 → Hook 읽기 → Galaxy 기존 앱 통신 확인 →
 Gen5W 수동 기능 조회 → 대상 확인 후 별도 승인된 BLE 시험이다.

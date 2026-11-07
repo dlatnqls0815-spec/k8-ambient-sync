@@ -1,0 +1,16 @@
+{
+  "id": "k8-ambient-diagnostics",
+  "name": "K8 Ambient passive diagnostics",
+  "version": "0.1.0",
+  "hmgapi": ">=1.0.2",
+  "authors": ["K8 Ambient Sync contributors"],
+  "license": "AGPL-3.0",
+  "description": "Source-only passive SML observer; disabled by default; K8 compatibility unverified.",
+  "hooks": {
+    "jar": "hooks.jar",
+    "entry": "io.github.k8ambient.diagnostic.PassiveDiagnostics",
+    "points": {
+      "framework.hkmc_loader.automotive_service": "observe"
+    }
+  }
+}

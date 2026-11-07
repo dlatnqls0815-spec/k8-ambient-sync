@@ -11,6 +11,30 @@
 RGB/밝기/전원 정규화는 raw와 분리한다. 테마 코드와 알 수 없는 값은 추정하지 않는다.
 실제 BLE transport·기기 선택·페어링·CAN/LIN 송신은 이 단계에 없다.
 
+## 현재 구현
+
+| 위치 | 역할 | 제한 |
+|---|---|---|
+| `core/.../SmlStatus.java` | 9바이트 이상 SML의 raw 채널/밝기/dim/drive-mode 및 추가 바이트 보존 | 테마값 변환 금지. `toEv6ReferenceState()`만 명시적 참조 변환 |
+| `core/.../AmbientState.java` | RGB 0..255, 밝기 0..100, 전원 boolean의 불변 정규화 입력 | K8 변환 규칙 아님. 밝기 %는 측정 광도 아님 |
+| `core/.../WporterE1Candidate.java` | 단일 공개 후보의 9바이트 코덱 | 후보 자동선택/UUID/실제 BLE 송신 없음 |
+| `core/.../SyncEngine.java` | 필드별 전송 상태, 최신값 병합, 중복 제거, 모의 연결 유지·재시도 | 하나의 직렬 이벤트 루프 및 동기 완료 transport 계약 |
+| `host/.../StateFile.java` | PC 파일 원자 교체와 손상 입력 거부 | Android 코드가 아님. 차량 포팅은 `AtomicFile` 사용 예정 |
+| `diagnostic/` | automotive-service observe Hook → passive SML 수신·원시 필드 로그 | 기본 OFF·미설치. 제어 코어와 연결하지 않음 |
+| `tests/` | 가상 이벤트/시계/컨트롤러 및 Android/HMG fake | 실제 장치/스레드/Binder/DEX 검증 아님 |
+
+코어는 초기 disabled이며 상태 파일을 읽어도 자동 활성화되지 않는다.
+`onState()`는 최신 정규화 상태만 보관하고 `tick(monotonicMillis)`는 한 번에 패킷 하나를 처리한다.
+전원 변경을 먼저 처리하고 OFF에서는 RGB/밝기를 보내지 않는다. ON에서는 대기 중인 색상과
+밝기를 번갈아 처리해 연속 색상 변경 중에도 밝기가 갱신된다.
+패킷 사이 50ms는 **모의 가정**이며 컨트롤러에 안전하다고 검증한 수치가 아니다.
+실패한 쓰기는 완료로 기록하지 않으며, 연결 복구 후 최신 상태 전체를 다시 보낸다.
+재시도는 100ms에서 5초까지 증가한다. 실제 장치의 초기화/인증/keepalive는 별도 구현 전이다.
+전송 완료 카운터는 transport가 수락한 횟수이며 실제 LED 반영 ACK가 아니다.
+
+raw 상태 → 정규화 상태 → 실제 사제 송신을 잇는 부분은 실측 증거를 확보한 뒤 구현한다.
+진단 로그의 250ms 병합 간격을 실제 동기화 경로로 사용하지 않는다.
+
 | 안 | 경로 | 현재 판단 | 채택 조건 |
 |---|---|---|---|
 | A 우선 | Gen5W 관측 → Gen5W GATT → 사제 조명 | 상태 방송 근거 있음, K8/LE 미확인 | Hook·Central·GATT·대상 프로토콜·동시연결 실측 |
