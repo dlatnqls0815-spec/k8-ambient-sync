@@ -2,6 +2,25 @@
 
 ## 최신 작업
 
+USB 재실행으로7개 파일 복사에 성공했고 collection.txt 포함8개를 private에 해시 대조해 보관했다.
+기준 입력은 private/vehicle-usb/K8-AMBIENT-EVIDENCE-20261107-140107-1783다.
+실제 JSON을 car_report_evidence.py에 적용했다. 원본과 로그를 외부 전송/커밋하지 않는다.
+
+현재 map은 unknown/gl3hev/kor/260902, probed, hooks_on=true다.
+342/342 resolve와 map-check의 folder/files 일치를 확인했다.
+미매핑은 themesettings.split_item.type이다. SML3개와 relay loader/class_loader/intercept_key는 맵에 있다.
+세 SML 서명은 두 보고서의 후보와 제공된 framework 맵에서 일치한다.
+
+로그에는 LightRelay 등록14개와 vehicle 전달의 Connection refused14개가 있다.
+고정1.0.2 소스에서 onReceive의 SML_STATUS byte[]가 null이 아닐 때 send가 실행되므로,
+이 실패는 기록상 배열 수신 후 전달을 시도한 흔적이다. 전체 이벤트 횟수·raw 값·길이·현재 수명은 미확인이다.
+vehicle.log는 없고 보고서에는 활성 nemesis-shortcut 하나만 있다. on-demand 서비스 수명과
+일치할 가능성이 있지만 services.txt/현재 프로세스를 읽어 확인하지 않았다.
+자세한 판단은 K8_SML_MAP_CHECK와 private/k8-sml-evidence-review.json을 읽는다.
+이번 문서 변경은 기존 Python57개+Java190개 통과 결과를 재사용했다.
+
+## 이전 작업 기록
+
 2277aa3 이후 사용자에게 K8 화면의342/342 resolve, probed GL3HEV/kor260902,
 미매핑1개·Map checked를 전달받았다. HMG-API1.0.2/NEMESIS1.16.4다.
 기존 JSON은 로컬 private/USB에서 발견하지 못했다.

@@ -1,7 +1,29 @@
 # 진행 상황
 
-기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **K8 Map checked 화면 정보 확보 / 기존 JSON과 SML 수신 자료 대기**다.
+기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **K8 JSON·선택 맵 확보 / SML 배열 전달 시도 흔적 확인**이다.
 실제 차량에서 동작하는 완성품 또는 배포용 모듈을 만든 상태는 아니다.
+
+## USB 재수집 분석 — 2026-11-07
+
+- 수정본으로 기존 Car Report2개와 맵/검사/설치/로그의7개 파일을 복사했다.
+  collection.txt 포함8개를 private에 보관하고 USB 사본과 SHA256을 대조했다.
+- map.status=probed, hooks_on=true, 과거342/342 resolve를 JSON으로 확인했다.
+  map-check의 폴더와 파일 해시 목록은 수집한 car.json과 일치한다.
+- 현재 맵은 unknown/gl3hev/kor/260902다. missing은 themesettings.split_item.type 하나다.
+  분할화면 편집 항목이며 확인한 SML/relay 의존 목록에 직접 포함되지 않는다.
+- 세 SML 후보는 선택 framework.json에 있고 두 보고서의 탐색 서명과 일치한다.
+  loader/class_loader/intercept_key도 제공된 맵에 있다.
+- HMG 로그의 LightRelay 등록14개와 전달 실패14개를 확인했다. 실패는 모두 Connection refused다.
+  onReceive가 SML_STATUS 배열을 받으면 send를 호출하는 고정 소스에 따라, 기록된 배열 수신 후
+  전달 시도를 추론할 수 있다. 중복 오류 억제가 있어 실제 이벤트 수는 알 수 없다.
+  raw RGB/밝기/길이·정규화·현재 서비스 상태는 미확인이다. vehicle.log는 수집되지 않았다.
+- 보고서2개에는 활성 nemesis-shortcut 하나만 있다. vehicle 서비스의 on-demand 수명과
+  일치할 가능성이 있으나 당시 services.txt/프로세스 상태를 확보한 것은 아니다.
+- 기존 car_report_evidence.py를 실제 보고서와 맵 사본에 실행해 정상 요약을 확인했다.
+  runtime reception=unknown인 자동 요약은 맵만 분석한 결과다. 로그를 대조한 추가 판단은
+  private/k8-sml-evidence-review.json과 K8_SML_MAP_CHECK 문서에 기록했다.
+- 이번 변경은 조사·진행 문서이며 기존 Python57개/Java190개 통과 결과를 재사용했다.
+  실제 원시값 취득과 Gen5W BLE 및 종단 동기화 검증이 다음 단계다.
 
 ## K8 Map checked 대조와 USB 수집 준비 — 2026-11-07
 
@@ -87,12 +109,12 @@
   밝기·전원·암호화 분기는 일반화할 수 없다. 실제 선택된 컨트롤러 분기는 미확인이다.
 
 ## 진행 중
-첫 수집 로그는 확보했고 수정한 USB의 재실행과 실제 HCI 자료를 대기한다.
+재수집 자료에서 SML 배열 수신·전달 시도를 대조했다. 원시값·현재 서비스 상태와 실제 HCI 자료가 남아 있다.
 실제 transport와 raw→K8 정규화 통합은 아래 증거가 확보될 때 진행한다.
 
 ## 미확인
-1. K8의 현재 맵 원본과 미매핑 지점 이름, 실행 중 Hook와 SML 수신 상태.
-   사용자 화면의342/342 resolve를 확보했으며 JSON 대조가 남아 있다.
+1. 실행 중 서비스의 현재 상태, SML payload 길이·RGB·밝기 원시값과 K8 정규화.
+   현재 맵과 미매핑 ID는 JSON 대조를 완료했고 SML 배열 수신의 간접 흔적을 확보했다.
 2. 순정 테마의 실제 RGB, dim/drive-mode/자동 밝기, 마지막 저장값·현재 출력의 구분.
 3. Gen5W 칩셋·BLE Central/GATT API/권한·통화/미디어/Android Auto 병행.
 4. 실제 APK 서명·실행 중 선택된 통신 분기와 사제 컨트롤러 장치군·UUID·초기화/인증·명령·keepalive.
