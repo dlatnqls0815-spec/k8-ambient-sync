@@ -4,8 +4,8 @@
 raw→K8 상태 매핑이나 실제 BLE 송신을 활성화하지 않는다.
 
 실차에서 필요한 최소 조작 순서는 [CAPTURE_SESSION](CAPTURE_SESSION.md)에 있다.
-빨강/초록/파랑 후보는 현재 도구로 비교 가능하지만, Lotus 설치본의 다른 밝기 형식·E2·암호화는
-의미를 추정하지 않고 미확인으로 남긴다.
+RGB 후보와 실측한 Lotus E1 밝기 형식을 비교할 수 있다. 기타 밝기 형식, E2와 암호화는
+미확인으로 남긴다. [실측 결과](research/LOTUS_HCI_CAPTURE.md)를 참조한다.
 
 ## 1. Galaxy 연결과 앱 메타데이터
 
@@ -67,8 +67,9 @@ Signed/Prepare/Execute write, 동적 CID/EATT, 다른 프레이밍은 지원하�
 handle이 재사용돼도 연결 시작 frame이 다르면 별도 세션이다.
 시작 frame이 없으면 연결 세션 미확인으로 남긴다. UUID는 자동으로 추측하거나 후보값을 채우지 않는다.
 
-기본 결과는 `private/att-evidence.json`이다. 공개 후보와 정확히 일치한 형식만 RGB/밝기/전원으로
-정규화하고 알 수 없는 payload는 개수로만 남긴다. raw payload·MAC·절대 시각·기기 이름을 출력하지 않는다.
+기본 결과는 `private/att-evidence.json`이다. 공개 후보와 정확히 일치한 형식은 RGB/밝기/전원으로
+정규화한다. 별도 `observed_events`에는 실측 밝기 형식과 관측 범위(5–23)가 일치한 원시 단계만 기록한다.
+알 수 없는 payload는 개수로 남긴다. raw payload·MAC·절대 시각·기기 이름을 출력하지 않는다.
 출력은 로컬 검토용이며 자동 익명화 완료본이나 기기 호환성 인증서가 아니다.
 
 **후보 일치 ≠ 대상 프로토콜 확정.** 앱 조작 시각표·실제 조명 반응·서비스/characteristic discovery·

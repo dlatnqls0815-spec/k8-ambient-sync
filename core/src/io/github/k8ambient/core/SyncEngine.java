@@ -17,6 +17,7 @@ public final class SyncEngine {
 
     private final Transport transport;
     private final int maximumBrightness;
+    private final boolean observedLotus;
     private AmbientState desired;
     private boolean enabled, hadConnection, lastDataWasColor;
     private Boolean sentOn;
@@ -30,10 +31,20 @@ public final class SyncEngine {
 
     /** The maximum is an app percentage; the default 20 is an unverified user calibration. */
     public SyncEngine(Transport transport, int maximumBrightness) {
+        this(transport, maximumBrightness, false);
+    }
+
+    /** Offline replay of the captured LotusLamp X color and brightness formats. */
+    public static SyncEngine forObservedLotus(Transport transport) {
+        return new SyncEngine(transport, 20, true);
+    }
+
+    private SyncEngine(Transport transport, int maximumBrightness, boolean observedLotus) {
         if (transport == null) throw new IllegalArgumentException("Transport is required");
         AmbientState.checkRange(maximumBrightness, 100);
         this.transport = transport;
         this.maximumBrightness = maximumBrightness;
+        this.observedLotus = observedLotus;
     }
 
     public void onState(AmbientState state) {
@@ -65,6 +76,10 @@ public final class SyncEngine {
             throw new IllegalArgumentException("Clock must be monotonic");
         lastTick = monotonicMillis;
         if (!enabled || desired == null || monotonicMillis < retryAt) return;
+        if (observedLotus && !desired.on) {
+            forgetSent();
+            return;
+        }
 
         if (!transport.connected()) {
             hadConnection = false;
@@ -90,14 +105,16 @@ public final class SyncEngine {
         boolean colorPending = sentRed != target.red || sentGreen != target.green || sentBlue != target.blue;
         byte[] packet;
         int field;
-        if (sentOn == null || sentOn.booleanValue() != target.on) {
+        if (!observedLotus && (sentOn == null || sentOn.booleanValue() != target.on)) {
             packet = WporterE1Candidate.power(target.on);
             field = 0;
         } else if (!target.on) {
             return;
         } else if (sentBrightness != targetBrightness && (lastDataWasColor || !colorPending)) {
             // Alternate pending data fields so continuous RGB updates cannot starve brightness.
-            packet = WporterE1Candidate.brightness(targetBrightness);
+            packet = observedLotus
+                    ? new byte[] {0x7e, 4, 1, (byte) targetBrightness, 1, -1, 2, 1, (byte) 0xef}
+                    : WporterE1Candidate.brightness(targetBrightness);
             field = 2;
         } else if (colorPending) {
             packet = WporterE1Candidate.color(target.red, target.green, target.blue);

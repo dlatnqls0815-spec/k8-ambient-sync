@@ -59,15 +59,27 @@ def candidate(packet):
     return None
 
 
+def observed_lotus_brightness(packet):
+    """Exact captured E1/04 frame shape; only levels observed from 5 through 23.
+
+    The byte is retained as a raw level, not a verified displayed percent or LED response.
+    """
+    if (len(packet) == 9 and packet[:3] == b"\x7e\x04\x01"
+            and 5 <= packet[3] <= 23 and packet[4:] == b"\x01\xff\x02\x01\xef"):
+        return {"kind": "brightness", "raw_level": packet[3], "format": "lotus-e1-04-observed"}
+    return None
+
+
 def analyze_tsv(text):
     if len(text.encode("utf-8")) > MAX_INPUT_BYTES:
         raise EvidenceError("Input size limit exceeded")
     counts = {"rows": 0, "outbound_writes": 0, "ignored_incoming": 0,
-              "candidate_matches": 0, "unknown_count": 0, "unknown_epoch_writes": 0}
+              "candidate_matches": 0, "observed_brightness_matches": 0,
+              "unknown_count": 0, "unknown_epoch_writes": 0}
     report = {"schema": "k8-ambient-att-evidence-v1", "protocol_verified": False,
               "transport_type": "unknown", "candidate_profile": "wporter82-e1-candidate",
               "service_uuid": None, "characteristic_uuid": None,
-              "counts": counts, "sessions": [], "candidate_events": []}
+              "counts": counts, "sessions": [], "candidate_events": [], "observed_events": []}
     aliases = {}
     previous_frame = 0
     try:
@@ -119,6 +131,13 @@ def analyze_tsv(text):
                 alias = aliases[key]
             decoded = candidate(packet)
             if decoded is None:
+                observed = observed_lotus_brightness(packet)
+                if observed is not None:
+                    counts["observed_brightness_matches"] += 1
+                    report["observed_events"].append({"frame": frame, "relative_seconds": relative,
+                        "session_alias": alias, "connection_epoch_known": epoch is not None,
+                        "attribute_handle": handle, "write_opcode": opcode, "observed": observed})
+                    continue
                 counts["unknown_count"] += 1
                 continue
             counts["candidate_matches"] += 1
@@ -189,6 +208,7 @@ def main(argv=None):
     write_report(report, target)
     counts = report["counts"]
     print("ATT evidence saved privately: rows={rows}, candidate_matches={candidate_matches}, "
+          "observed_brightness_matches={observed_brightness_matches}, "
           "unknown_count={unknown_count}. Protocol remains unverified.".format(**counts))
     return 0
 

@@ -26,6 +26,7 @@ public final class TestMain {
         final List<byte[]> writes = new ArrayList<byte[]>();
         Action afterWrite;
         boolean connected, failWrite, failEveryWrite, silentConnect, failDisconnect;
+        boolean acceptObservedLotus;
         int failedConnects, connects, writeAttempts, disconnects;
 
         public boolean connected() { return connected; }
@@ -38,7 +39,7 @@ public final class TestMain {
             writeAttempts++;
             if (!connected) throw new IOException();
             if (failWrite || failEveryWrite) { failWrite = false; throw new IOException("private synthetic detail"); }
-            WporterE1Candidate.decode(packet);
+            if (!acceptObservedLotus) WporterE1Candidate.decode(packet);
             writes.add(packet.clone());
             if (afterWrite != null) {
                 Action callback = afterWrite;
@@ -169,6 +170,37 @@ public final class TestMain {
         engine.onState(state(10, rawLevel(11).toK8ProvisionalBrightnessPercent(), true));
         engine.tick(150);
         check(mock.command(3).brightness == 20, "K8 maximum becomes mock aftermarket 20 percent");
+    }
+
+    private static void observedLotusReplay() {
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forObservedLotus(mock);
+        AmbientState maximum = new AmbientState(255, 0, 0, rawLevel(11).toK8ProvisionalBrightnessPercent(), true);
+        AmbientState low = new AmbientState(255, 0, 0, rawLevel(3).toK8ProvisionalBrightnessPercent(), true);
+        engine.setEnabled(true);
+        engine.onState(new AmbientState(255, 0, 0, 0, false));
+        engine.tick(0);
+        check(mock.connects == 0 && mock.writes.isEmpty(), "observed profile never connects for OFF");
+        engine.onState(maximum);
+        engine.tick(50);
+        engine.tick(100);
+        check(Arrays.equals(mock.writes.get(0), new byte[] {0x7e, 7, 5, 3, -1, 0, 0, 0x10, (byte) 0xef}),
+                "observed red frame");
+        check(Arrays.equals(mock.writes.get(1), new byte[] {0x7e, 4, 1, 20, 1, -1, 2, 1, (byte) 0xef}),
+                "K8 maximum emits captured 20 percent frame");
+        engine.onState(low);
+        engine.tick(150);
+        check(Arrays.equals(mock.writes.get(2), new byte[] {0x7e, 4, 1, 5, 1, -1, 2, 1, (byte) 0xef}),
+                "K8 level three emits captured five percent frame");
+        engine.onState(new AmbientState(255, 0, 0, 0, false));
+        engine.tick(200);
+        check(mock.writes.size() == 3, "observed profile emits no speculative OFF frame");
+        engine.onState(low);
+        engine.tick(250);
+        engine.tick(300);
+        check(mock.writes.size() == 5 && Arrays.equals(mock.writes.get(2), mock.writes.get(4)),
+                "observed profile resumes color and brightness after OFF input");
     }
 
     private static void deduplicationAndCoalescing() {
@@ -376,6 +408,7 @@ public final class TestMain {
         stateAndRawStatus();
         packets();
         k8ProvisionalBrightness();
+        observedLotusReplay();
         userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();

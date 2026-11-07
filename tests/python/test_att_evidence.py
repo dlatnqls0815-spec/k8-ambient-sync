@@ -84,6 +84,41 @@ class AttEvidenceTest(unittest.TestCase):
         self.assertFalse(report["protocol_verified"])
         self.assertNotIn("percent", json.dumps(report))
 
+    def test_exact_observed_lotus_brightness_stays_separate_from_public_candidate(self):
+        levels = [5, 10, 15, 20, 23]
+        report = evidence.analyze_tsv(tsv(*[
+            row(**{"frame.number": str(10 + i), "frame.time_relative": str(i * 5),
+                   "btatt.value": "7e0401" + format(level, "02x") + "01ff0201ef"})
+            for i, level in enumerate(levels)]))
+        self.assertEqual(0, report["counts"]["candidate_matches"])
+        self.assertEqual(len(levels), report["counts"]["observed_brightness_matches"])
+        self.assertEqual(0, report["counts"]["unknown_count"])
+        self.assertEqual([], report["candidate_events"])
+        self.assertEqual(levels, [event["observed"]["raw_level"] for event in report["observed_events"]])
+        self.assertTrue(all(event["observed"]["format"] == "lotus-e1-04-observed"
+                            for event in report["observed_events"]))
+        self.assertFalse(report["protocol_verified"])
+        self.assertNotIn("percent", json.dumps(report))
+        self.assertNotIn("7e0401", json.dumps(report))
+
+    def test_observed_shape_and_range_fail_closed(self):
+        for encoded in ("7e04010401ff0201ef", "7e04011801ff0201ef",
+                        "7e04016401ff0201ef", "7e04010500ff0201ef",
+                        "7e04010501ff0200ef", "7e04010501ff0201ee",
+                        "7e04010501ff0201ef00"):
+            with self.subTest(encoded=encoded):
+                report = evidence.analyze_tsv(tsv(row(**{"btatt.value": encoded})))
+                self.assertEqual(0, report["counts"]["observed_brightness_matches"])
+                self.assertEqual(1, report["counts"]["unknown_count"])
+                self.assertEqual([], report["observed_events"])
+
+    def test_incoming_observed_shape_is_not_phone_command(self):
+        report = evidence.analyze_tsv(tsv(row(**{
+            "hci_h4.direction": "1", "btatt.value": "7e04010501ff0201ef"})))
+        self.assertEqual(1, report["counts"]["ignored_incoming"])
+        self.assertEqual(0, report["counts"]["observed_brightness_matches"])
+        self.assertEqual([], report["observed_events"])
+
     def test_unknown_payload_is_never_copied_into_report(self):
         secret = "SYNTHETIC_PRIVATE_TOKEN"
         encoded = secret.encode().hex()

@@ -4,8 +4,8 @@
 Lotus Lamp X 사제 조명과 동기화하는 프로젝트다.
 
 **현재 실차 동기화 프로그램은 아니다.** 공개 소스 분석과 오프라인 코어를 먼저 검증한다.
-순정 방송 경로는 HMG-API 소스에 있으나 K8 수신 가능성, RGB 테마 의미,
-Gen5W BLE Central 지원, 실제 사제 컨트롤러 프로토콜은 아직 확인되지 않았다.
+K8 순정 SML 로그와 LotusLamp X의 BLE 색상·밝기 쓰기를 각각 실측했다.
+순정 RGB 테마 의미, Gen5W BLE Central의 실제 연결, 사제 전원 명령은 확인 중이다.
 
 구현된 부분은 raw SML 파서, 모의 전용 E1 후보 코덱, 최신 상태 병합·중복 제거·
 색상/밝기 공정 처리·재연결 코어, PC용 마지막 상태 파일, 기본 OFF인 진단 Hook 소스다.
@@ -61,5 +61,5 @@ git -C k8-ambient-sync remote set-url origin https://github.com/dlatnqls0815-spe
 `phone_probe.py`는 승인된 USB 또는 무선 ADB 연결만 사용하고,
 `att_evidence.py`는 이미 저장된 TSV만 읽는다. 결과는 `private/`에만 저장한다.
 실제 Galaxy에서 LotusLamp X 5.21.03(425), Android 17/API37 메타데이터를 확인했다.
-실제 컨트롤러의 패킷·UUID·초기화는 차량에 접근 가능한 다음 정차 시험에서 확인한다.
+실제 컨트롤러의 색상·밝기 명령과 UUID는 [Lotus HCI 실측](docs/research/LOTUS_HCI_CAPTURE.md)에 정리했다.
 [설치본 분석](docs/research/LOTUS_APK_5_21_03.md)에서 E1/E2·조건부 암호화·GATT 호출 위치를 확인했다.
