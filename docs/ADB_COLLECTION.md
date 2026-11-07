@@ -27,3 +27,9 @@ BLE 선언 및 HMG 프로세스는 현재 순간의 요약만 기록한다.
 기존 캐시 확보 후 사용자가 순정 색상·밝기를 수동 변경하면 즉시 새 출력 폴더로
 수집기를 한 번 더 실행한다. 로그 출력 자체와 실차 값 존재 여부는 결과로 판단한다.
 Galaxy Lotus HCI 기록은 차량 ADB 수집과 별도다.
+
+기존 캐시가 0건일 때 차량을 정차·P 상태로 유지하고 실시간 선별 읽기를 시작할 수 있다.
+`tools/watch_k8_sml_adb.py --adb <adb.exe 경로> --seconds 300`은 최대 5분 후 종료하고
+세 문구만 `private/vehicle-adb/K8-AMBIENT-LIVE-*/logs/oem-sml-live.log`에 저장한다.
+사용자가 조작을 마친 뒤 `collection.txt`의 줄 수와 종료 상태를 확인한다.
+이 명령도 로그를 삭제하거나 차량 명령을 보내지 않는다.

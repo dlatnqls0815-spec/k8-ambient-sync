@@ -58,6 +58,10 @@ public final class TestMain {
         return new AmbientState(red, 20, 30, brightness, on);
     }
 
+    private static SmlStatus rawLevel(int level) {
+        return SmlStatus.parse(new byte[] {0, 10, 0, 20, 0, 30, (byte) level, 1, 1});
+    }
+
     private static void stateAndRawStatus() {
         AmbientState a = new AmbientState(0, 255, 128, 100, true);
         check(a.equals(new AmbientState(0, 255, 128, 100, true)), "state equality");
@@ -136,6 +140,35 @@ public final class TestMain {
         final byte[] otherProfile = WporterE1Candidate.brightness(50);
         otherProfile[1] = 4;
         rejects(new Action() { public void run() { WporterE1Candidate.decode(otherProfile); } });
+    }
+
+    private static void k8ProvisionalBrightness() {
+        check(rawLevel(1).toK8ProvisionalBrightnessPercent() == 9, "K8 lit minimum normalizes above zero");
+        check(rawLevel(11).toK8ProvisionalBrightnessPercent() == 100, "K8 maximum normalizes to 100");
+        int previousOutput = 0;
+        for (int level = 1; level <= 11; level++) {
+            int normalized = rawLevel(level).toK8ProvisionalBrightnessPercent();
+            int output = (normalized * 20 + 50) / 100;
+            check(output > previousOutput && output <= 20, "K8 provisional levels remain lit and ordered");
+            previousOutput = output;
+        }
+        for (final int level : new int[] {0, 12, 255}) rejects(new Action() {
+            public void run() { rawLevel(level).toK8ProvisionalBrightnessPercent(); }
+        });
+        check(!rawLevel(1).toEv6ReferenceState().on, "EV6 reference off remains separate from K8 lit minimum");
+
+        MockTransport mock = new MockTransport();
+        SyncEngine engine = new SyncEngine(mock);
+        engine.onState(state(10, rawLevel(1).toK8ProvisionalBrightnessPercent(), true));
+        engine.setEnabled(true);
+        engine.tick(0);
+        engine.tick(50);
+        engine.tick(100);
+        check(mock.command(0).on && mock.command(2).brightness == 2,
+                "explicitly lit K8 minimum becomes mock ON at aftermarket 2 percent");
+        engine.onState(state(10, rawLevel(11).toK8ProvisionalBrightnessPercent(), true));
+        engine.tick(150);
+        check(mock.command(3).brightness == 20, "K8 maximum becomes mock aftermarket 20 percent");
     }
 
     private static void deduplicationAndCoalescing() {
@@ -342,6 +375,7 @@ public final class TestMain {
     public static void main(String[] args) {
         stateAndRawStatus();
         packets();
+        k8ProvisionalBrightness();
         userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();

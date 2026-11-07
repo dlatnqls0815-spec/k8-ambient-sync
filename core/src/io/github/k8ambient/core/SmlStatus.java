@@ -28,6 +28,16 @@ public final class SmlStatus {
 
     public byte[] rawBytes() { return bytes.clone(); }
 
+    /**
+     * K8 observation: level 1 is the lowest lit setting and level 11 was the maximum.
+     * Linear normalization between those endpoints is provisional; this does not infer power state.
+     */
+    public int toK8ProvisionalBrightnessPercent() {
+        if (brightnessRaw < 1 || brightnessRaw > 11)
+            throw new IllegalArgumentException("Unknown K8 brightness level");
+        return (brightnessRaw * 100 + 5) / 11;
+    }
+
     /** EV6 upstream reference only; this mapping is unverified for K8. */
     public AmbientState toEv6ReferenceState() {
         if (redRaw > 255 || greenRaw > 255 || blueRaw > 255)

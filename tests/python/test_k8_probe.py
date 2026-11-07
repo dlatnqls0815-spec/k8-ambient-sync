@@ -97,6 +97,11 @@ class K8ProbeTest(unittest.TestCase):
         self.assertEqual("unavailable", report["map_check"]["availability"])
         self.assertNotIn(SECRET, json.dumps(report))
 
+    def test_old_android_cat_permission_error_with_zero_exit_is_unavailable(self):
+        self.outputs[("cat", k8_probe.MAP_FILE)] = "/system/bin/sh: cat: /data/hmgapi/state/map-check.json: Permission denied"
+        report = k8_probe.probe("fake-adb")
+        self.assertEqual("unavailable", report["map_check"]["availability"])
+
     def test_failure_summary_drops_exceptions_and_nonallowlisted_point_names(self):
         point = "framework.hkmc_loader.automotive_service"
         self.state.update(ok=False, failed=[point + ": " + SECRET, SECRET + ": failure"])

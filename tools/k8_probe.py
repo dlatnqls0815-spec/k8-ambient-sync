@@ -56,7 +56,12 @@ def probe(adb, serial=None):
 
     def shell(*words, optional=False):
         try:
-            return phone_probe._read(adb, ["-s", selected, "shell"] + list(words)).strip()
+            value = phone_probe._read(adb, ["-s", selected, "shell"] + list(words)).strip()
+            # Android 4.4 ADB shell may exit 0 even when cat reports an error in stdout.
+            if optional and words[0] == "cat" and value.startswith(
+                    ("cat:", "sh: cat:", "/system/bin/sh: cat:", "Permission denied")):
+                return None
+            return value
         except ProbeError:
             if optional:
                 return None
