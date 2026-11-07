@@ -70,16 +70,29 @@ def observed_lotus_brightness(packet):
     return None
 
 
+def static_lotus_power(packet):
+    """Exact ON/OFF frames read from LotusLamp X 5.21.03 bytecode, not yet seen in a capture.
+
+    A match is the first HCI evidence for these frames; it still says nothing about the LED response.
+    """
+    if packet == b"\x7e\x07\x04\xff\x01\x01\x02\x01\xef":
+        return {"kind": "power", "on": True, "format": "lotus-e1-07-static-analysis"}
+    if packet == b"\x7e\x07\x04\x00\x01\x00\x02\x01\xef":
+        return {"kind": "power", "on": False, "format": "lotus-e1-07-static-analysis"}
+    return None
+
+
 def analyze_tsv(text):
     if len(text.encode("utf-8")) > MAX_INPUT_BYTES:
         raise EvidenceError("Input size limit exceeded")
     counts = {"rows": 0, "outbound_writes": 0, "ignored_incoming": 0,
-              "candidate_matches": 0, "observed_brightness_matches": 0,
+              "candidate_matches": 0, "observed_brightness_matches": 0, "static_power_matches": 0,
               "unknown_count": 0, "unknown_epoch_writes": 0}
     report = {"schema": "k8-ambient-att-evidence-v1", "protocol_verified": False,
               "transport_type": "unknown", "candidate_profile": "wporter82-e1-candidate",
               "service_uuid": None, "characteristic_uuid": None,
-              "counts": counts, "sessions": [], "candidate_events": [], "observed_events": []}
+              "counts": counts, "sessions": [], "candidate_events": [], "observed_events": [],
+              "static_power_events": []}
     aliases = {}
     previous_frame = 0
     try:
@@ -137,6 +150,13 @@ def analyze_tsv(text):
                     report["observed_events"].append({"frame": frame, "relative_seconds": relative,
                         "session_alias": alias, "connection_epoch_known": epoch is not None,
                         "attribute_handle": handle, "write_opcode": opcode, "observed": observed})
+                    continue
+                power = static_lotus_power(packet)
+                if power is not None:
+                    counts["static_power_matches"] += 1
+                    report["static_power_events"].append({"frame": frame, "relative_seconds": relative,
+                        "session_alias": alias, "connection_epoch_known": epoch is not None,
+                        "attribute_handle": handle, "write_opcode": opcode, "static": power})
                     continue
                 counts["unknown_count"] += 1
                 continue
@@ -209,6 +229,7 @@ def main(argv=None):
     counts = report["counts"]
     print("ATT evidence saved privately: rows={rows}, candidate_matches={candidate_matches}, "
           "observed_brightness_matches={observed_brightness_matches}, "
+          "static_power_matches={static_power_matches}, "
           "unknown_count={unknown_count}. Protocol remains unverified.".format(**counts))
     return 0
 

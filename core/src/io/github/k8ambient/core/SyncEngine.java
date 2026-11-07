@@ -17,7 +17,7 @@ public final class SyncEngine {
 
     private final Transport transport;
     private final int maximumBrightness;
-    private final boolean observedLotus;
+    private final boolean observedLotus, lotusPower;
     private AmbientState desired;
     private boolean enabled, hadConnection, lastDataWasColor;
     private Boolean sentOn;
@@ -31,20 +31,29 @@ public final class SyncEngine {
 
     /** The maximum is an app percentage; the default 20 is an unverified user calibration. */
     public SyncEngine(Transport transport, int maximumBrightness) {
-        this(transport, maximumBrightness, false);
+        this(transport, maximumBrightness, false, false);
     }
 
-    /** Offline replay of the captured LotusLamp X color and brightness formats. */
+    /** Offline replay of the captured LotusLamp X color and brightness formats. OFF input stops output. */
     public static SyncEngine forObservedLotus(Transport transport) {
-        return new SyncEngine(transport, 20, true);
+        return new SyncEngine(transport, 20, true, false);
     }
 
-    private SyncEngine(Transport transport, int maximumBrightness, boolean observedLotus) {
+    /**
+     * Captured color/brightness plus the power frames read from the app bytecode.
+     * Power is static-analysis evidence only; keep this mock-only until an HCI capture matches it.
+     */
+    public static SyncEngine forLotusWithStaticPower(Transport transport) {
+        return new SyncEngine(transport, 20, true, true);
+    }
+
+    private SyncEngine(Transport transport, int maximumBrightness, boolean observedLotus, boolean lotusPower) {
         if (transport == null) throw new IllegalArgumentException("Transport is required");
         AmbientState.checkRange(maximumBrightness, 100);
         this.transport = transport;
         this.maximumBrightness = maximumBrightness;
         this.observedLotus = observedLotus;
+        this.lotusPower = lotusPower;
     }
 
     public void onState(AmbientState state) {
@@ -76,7 +85,7 @@ public final class SyncEngine {
             throw new IllegalArgumentException("Clock must be monotonic");
         lastTick = monotonicMillis;
         if (!enabled || desired == null || monotonicMillis < retryAt) return;
-        if (observedLotus && !desired.on) {
+        if (observedLotus && !lotusPower && !desired.on) {
             forgetSent();
             return;
         }
@@ -105,19 +114,21 @@ public final class SyncEngine {
         boolean colorPending = sentRed != target.red || sentGreen != target.green || sentBlue != target.blue;
         byte[] packet;
         int field;
-        if (!observedLotus && (sentOn == null || sentOn.booleanValue() != target.on)) {
-            packet = WporterE1Candidate.power(target.on);
+        if ((!observedLotus || lotusPower) && (sentOn == null || sentOn.booleanValue() != target.on)) {
+            packet = observedLotus ? LotusE1Frames.power(target.on) : WporterE1Candidate.power(target.on);
             field = 0;
         } else if (!target.on) {
             return;
         } else if (sentBrightness != targetBrightness && (lastDataWasColor || !colorPending)) {
             // Alternate pending data fields so continuous RGB updates cannot starve brightness.
             packet = observedLotus
-                    ? new byte[] {0x7e, 4, 1, (byte) targetBrightness, 1, -1, 2, 1, (byte) 0xef}
+                    ? LotusE1Frames.brightness(targetBrightness)
                     : WporterE1Candidate.brightness(targetBrightness);
             field = 2;
         } else if (colorPending) {
-            packet = WporterE1Candidate.color(target.red, target.green, target.blue);
+            packet = observedLotus
+                    ? LotusE1Frames.color(target.red, target.green, target.blue)
+                    : WporterE1Candidate.color(target.red, target.green, target.blue);
             field = 1;
         } else {
             return;

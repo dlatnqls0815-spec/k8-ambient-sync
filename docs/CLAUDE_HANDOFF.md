@@ -38,7 +38,9 @@
   기타 형식은 별도로 검증한다.
 - `SyncEngine.forObservedLotus()`는 색상·밝기 형태의 오프라인 재생 모드다.
   기본 출력 상한은 사제 20%다. 전원 OFF 입력은 재생을 멈춘다.
-  사제 전원 명령은 미확보라 이 모드에 전원 송신을 구현하지 않았다.
+  이 모드는 HCI에서 본 프레임만 쓰며 전원 송신이 없다.
+- `SyncEngine.forLotusWithStaticPower()`는 앱 바이트코드로 확인한 전원 프레임을 더한 별도 모의 모드다(2026-11-07 Claude).
+  `tools/att_evidence.py`는 같은 전원 프레임을 `static_power_events`로 따로 분류한다.
   기존 `WporterE1Candidate`는 별도 공개 후보이며 기존 호출·테스트를 유지했다.
 
 ## 중요한 미확정과 실패

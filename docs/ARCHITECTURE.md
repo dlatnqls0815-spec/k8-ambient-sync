@@ -15,6 +15,8 @@ raw 1~11만 0~100 입력으로 환산하고 전원·RGB 의미는 추론하지 �
 최대값은 조절 가능하며 실차 밝기 응답과 선형성은 미확인이다. 전원과 0%는 별개다.
 명시적으로 선택한 `SyncEngine.forObservedLotus()`는 캡처한 색상·밝기 형태를 재현한다.
 이 모드에서 전원 입력은 모의 재생의 진행 여부를 결정한다.
+`SyncEngine.forLotusWithStaticPower()`는 여기에 앱 바이트코드로 확인한 ON/OFF 프레임(`LotusE1Frames`)을
+더한 별도 모의 모드다. 전원 프레임은 HCI 실측 대조 전이므로 관측 모드와 분리해 둔다.
 실제 BLE transport·기기 선택·페어링·CAN/LIN 송신은 이 단계에 없다.
 
 ## 현재 구현

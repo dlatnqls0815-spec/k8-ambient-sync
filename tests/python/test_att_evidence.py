@@ -101,6 +101,27 @@ class AttEvidenceTest(unittest.TestCase):
         self.assertNotIn("percent", json.dumps(report))
         self.assertNotIn("7e0401", json.dumps(report))
 
+    def test_static_lotus_power_stays_separate(self):
+        report = evidence.analyze_tsv(tsv(
+            row(**{"frame.number": "10", "btatt.value": "7e0704ff01010201ef"}),
+            row(**{"frame.number": "11", "frame.time_relative": "5", "btatt.value": "7e07040001000201ef"})))
+        self.assertEqual(2, report["counts"]["static_power_matches"])
+        self.assertEqual(0, report["counts"]["candidate_matches"])
+        self.assertEqual(0, report["counts"]["unknown_count"])
+        self.assertEqual([True, False], [e["static"]["on"] for e in report["static_power_events"]])
+        self.assertTrue(all(e["static"]["format"] == "lotus-e1-07-static-analysis"
+                            for e in report["static_power_events"]))
+        self.assertFalse(report["protocol_verified"])
+        self.assertNotIn("7e0704", json.dumps(report))
+
+    def test_static_power_near_misses_fail_closed(self):
+        for encoded in ("7e0704ff01000201ef", "7e07040101010201ef", "7e0704ff01010200ef",
+                        "7e0704ff01010201ee", "7e0404ff01010201ef", "7e0704ff01010201ef00"):
+            with self.subTest(encoded=encoded):
+                report = evidence.analyze_tsv(tsv(row(**{"btatt.value": encoded})))
+                self.assertEqual(0, report["counts"]["static_power_matches"])
+                self.assertEqual([], report["static_power_events"])
+
     def test_observed_shape_and_range_fail_closed(self):
         for encoded in ("7e04010401ff0201ef", "7e04011801ff0201ef",
                         "7e04016401ff0201ef", "7e04010500ff0201ef",

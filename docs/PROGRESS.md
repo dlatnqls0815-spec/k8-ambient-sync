@@ -20,6 +20,11 @@
 - 추가 보고서 재분석: Lotus GATT 세션은 19:39:44~19:46:37 1회(최초 캡처와 같은 조명).
   보고서 시점 가동 5분(20:41 재부팅), 20:17~20:19 SmartThings BLE 단독 모드 반복으로 HCI 파일이 순환됐다.
   메모리 요약(BTSNOOP_LOG_SUMMARY)은 ACL이 없어 조작 구간 쓰기는 기존 자료에서 복원 불가.
+- 코드: `LotusE1Frames`(색상·밝기·정적 전원)와 `SyncEngine.forLotusWithStaticPower()` 모의 모드 추가.
+  기존 `forObservedLotus()` 동작은 유지. ATT 분석기에 `static_power_events` 분류와 근접 오판 검사 추가.
+  최초 캡처 TSV 재분석 결과는 RGB 4·밝기 120·미확인 7로 기존과 같고 전원 일치 0.
+- 검증: 클라우드 세션에서 Python 81 통과, Java 코어185·host14·진단 모의37 통과.
+  JDK 8이 없어 Java 수준만 8로 바꿔 실행했다. 노트북에서 `python tools/check.py`(source 7) 재실행 필요.
 - 사용자 지적: 이미 수행한 차량 조작을 다시 할 일처럼 적었다. Codex가 확인표를 고쳤고,
   Claude 문서도 "조작 완료, 증거 부족" 기준으로 맞췄다.
 

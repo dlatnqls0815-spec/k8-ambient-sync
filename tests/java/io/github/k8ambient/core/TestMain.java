@@ -203,6 +203,49 @@ public final class TestMain {
                 "observed profile resumes color and brightness after OFF input");
     }
 
+    private static void lotusStaticPower() {
+        byte[] on = {0x7e, 7, 4, -1, 1, 1, 2, 1, (byte) 0xef};
+        byte[] off = {0x7e, 7, 4, 0, 1, 0, 2, 1, (byte) 0xef};
+        check(Arrays.equals(LotusE1Frames.power(true), on), "static ON frame from app bytecode");
+        check(Arrays.equals(LotusE1Frames.power(false), off), "static OFF frame from app bytecode");
+        check(Arrays.equals(LotusE1Frames.brightness(20), new byte[] {0x7e, 4, 1, 20, 1, -1, 2, 1, (byte) 0xef}),
+                "brightness builder matches captured frame");
+        rejects(new Action() { public void run() { LotusE1Frames.brightness(101); } });
+        rejects(new Action() { public void run() { LotusE1Frames.color(256, 0, 0); } });
+
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forLotusWithStaticPower(mock);
+        AmbientState red = new AmbientState(255, 0, 0, rawLevel(11).toK8ProvisionalBrightnessPercent(), true);
+        engine.setEnabled(true);
+        engine.onState(new AmbientState(255, 0, 0, 0, false));
+        engine.tick(0);
+        check(mock.writes.size() == 1 && Arrays.equals(mock.writes.get(0), off), "OFF input sends OFF frame");
+        engine.tick(50);
+        engine.tick(100);
+        check(mock.writes.size() == 1, "OFF frame is not repeated while off");
+        engine.onState(red);
+        engine.tick(150);
+        engine.tick(200);
+        engine.tick(250);
+        check(mock.writes.size() == 4 && Arrays.equals(mock.writes.get(1), on), "ON frame precedes data");
+        check(Arrays.equals(mock.writes.get(2), LotusE1Frames.color(255, 0, 0))
+                && Arrays.equals(mock.writes.get(3), LotusE1Frames.brightness(20)), "color and brightness after ON");
+        engine.onState(new AmbientState(255, 0, 0, 0, false));
+        engine.tick(300);
+        engine.tick(350);
+        check(mock.writes.size() == 5 && Arrays.equals(mock.writes.get(4), off), "turning off sends one OFF frame");
+        engine.onState(red);
+        engine.tick(400);
+        engine.tick(450);
+        engine.tick(500);
+        check(mock.writes.size() == 8 && Arrays.equals(mock.writes.get(5), on)
+                && Arrays.equals(mock.writes.get(6), mock.writes.get(2)), "data is resent after OFF");
+        mock.connected = false;
+        engine.tick(550);
+        check(Arrays.equals(mock.writes.get(8), on), "reconnect restores power state first");
+    }
+
     private static void deduplicationAndCoalescing() {
         MockTransport mock = new MockTransport();
         SyncEngine engine = new SyncEngine(mock, 100);
@@ -409,6 +452,7 @@ public final class TestMain {
         packets();
         k8ProvisionalBrightness();
         observedLotusReplay();
+        lotusStaticPower();
         userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();
