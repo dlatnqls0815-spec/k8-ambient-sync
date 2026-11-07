@@ -72,3 +72,22 @@ passive 메타데이터·Git diff 공백 검사도 통과했다.
 
 Java와 Android Hook 코드는 변경하지 않아 기존 179개/실제 API19 계약 컴파일 결과를 재사용했다.
 TShark가 이 PC에 없고 실측 캡처가 없어 실제 파이프라인·기기 동작은 검사하지 않았다.
+
+## Map checked 대조와 USB 수집 검사 — 2026-11-07
+
+`python tools/check.py` 통과했다.
+Python55개 중54개 통과, 기존 Windows symlink 권한1개 skip이다.
+Java 코어139개, host14개, 진단 fake37개가 통과해 총190개다.
+새 Car Report 합성8개는 probed/checked와 runtime 구분, 후보와 제공된 맵의 구분,
+relay 의존 지점 누락, private 요약·입력 보존과 잘못된 입력 거부를 검사한다.
+추가 진단 fake는 RGB3색과 밝기·dim·drive-mode의 unsigned raw 보존을 검사한다.
+
+첫 실제 USB 실행은 SIZE_UNAVAILABLE로 복사0개였다.
+wc 실패 fixture에서 같은 증상을 실패하는 회귀검사로 재현한 뒤 크기 확인 의존성을 제거했다.
+최종 수집기9개 fixture는 기존 파일 보존·USB root/펌웨어 제한·자료 부재·복사 실패·wc 부재·
+다른 제조사 경로의 probed 맵과0개 복사 실패를 확인한다.
+host의 POSIX 셸을 사용하며 getprop/pwd/Android PATH와 source root를 가상 환경으로 대체한다.
+수정본의 실제 파일 복사는 두 번째 차량 실행에서 확인할 항목이다.
+수정본9개와 스크립트 구문 검사를 통과했다.
+마지막 전체 Python 검사58개 중57개 통과, 기존 symlink 권한1개 skip이다.
+production Java 변경이 없어 API19 계약 컴파일은 기존 통과 결과를 재사용했다.

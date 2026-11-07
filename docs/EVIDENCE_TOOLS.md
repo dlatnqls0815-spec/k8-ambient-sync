@@ -107,3 +107,17 @@ python tools/k8_probe.py --adb <기존 ADB 실행 파일 경로>
 기존 ADB 연결이 없으면 상태 화면을 수기로 기록한다. TCP ADB 활성화·새 진단 서비스·권한 상승·
 설치/검증 명령은 실행하지 않는다. 접근 실패를 설치 안 됨/Hook OFF로 단정하지 않는다.
 기존 map-check 성공과 enable 마커만으로 현재 Hook 또는 SML 이벤트 수신을 증명할 수 없다.
+
+## 기존 Car Report의 오프라인 대조
+
+```text
+python tools/car_report_evidence.py "<기존 Car Report.json>" --framework-map "<기존 framework.json>"
+```
+
+framework 옵션은 파일을 확보했을 때 사용한다. 이 도구는 로컬 JSON만 읽는다.
+맵 상태, 과거 검사 개수, 보고서에 표시된 missing ID, SML3개 후보와 relay 의존 지점을 구분한다.
+`map_car.points`의 탐색 후보와 제공된 framework 파일의 항목 여부를 각각 남긴다.
+보고서의 임의 오류·날짜·네트워크·원시 장치 정보는 요약에 복사하지 않는다.
+기본 출력은 private/car-report-evidence.json이며 입력 파일을 덮어쓰는 경로는 거부한다.
+
+자료 복사는 [CAPTURE_SESSION의 현재 단계](CAPTURE_SESSION.md#현재-차량-수집-단계)를 따른다.

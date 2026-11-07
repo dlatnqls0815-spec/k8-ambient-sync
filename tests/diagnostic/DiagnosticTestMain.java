@@ -158,10 +158,41 @@ public final class DiagnosticTestMain {
                 "unavailable hook failure contained");
     }
 
+    private static void rawColourBrightnessAndAuxiliaryFields() throws Throwable {
+        ModContext mod = new ModContext();
+        mod.diagnostics = Boolean.TRUE;
+        PassiveDiagnostics diagnostic = new PassiveDiagnostics();
+        FakeContext context = new FakeContext();
+        diagnostic.zygoteInit(mod);
+        mod.hook.simulate(new Object(), null, context);
+        byte[][] samples = {
+            {0, (byte) 255, 0, 0, 0, 0, 2, 0, 0},
+            {0, 0, 0, (byte) 255, 0, 0, 3, 0, 0},
+            {0, 0, 0, 0, 0, (byte) 255, 4, 0, 0},
+            {0, 0, 0, 0, 0, (byte) 255, 1, 0, 0},
+            {0, 0, 0, 0, 0, (byte) 255, 6, 0, 0},
+            {0, 0, 0, 0, 0, (byte) 255, (byte) 200, (byte) 240, (byte) 250}
+        };
+        for (int index = 0; index < samples.length; index++) {
+            byte[] sample = samples[index];
+            context.deliver(new Intent(ACTION).putExtra(EXTRA, sample));
+            context.handler.advanceBy(250);
+            check(mod.logs.get(index).equals("SML observed " + SmlStatus.parse(sample)),
+                    "raw fields preserved without a K8 brightness conversion");
+        }
+        check(observations(mod) == 6, "six separated colour and brightness observations");
+        check(mod.logs.get(5).contains("brightnessRaw=200;dimRaw=240;driveModeRaw=250"),
+                "unverified fields remain unsigned raw values");
+        mod.enabled = false;
+        diagnostic.onEnabled(mod, false);
+        check(HandlerThread.activeCount == 0, "raw observation test releases worker");
+    }
+
     public static void main(String[] args) throws Throwable {
         defaultsAndHookValidation();
         receiveCoalesceAndStop();
         failuresDoNotEscape();
+        rawColourBrightnessAndAuxiliaryFields();
         System.out.println("DiagnosticTestMain: " + checks + " checks passed (offline fakes)");
     }
 }

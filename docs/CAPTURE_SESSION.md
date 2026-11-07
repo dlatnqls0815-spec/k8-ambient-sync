@@ -1,9 +1,54 @@
 # 다음 정차 시험: 필요한 자료만 수집
 
 기준 브랜치 `codex/device-evidence`, 시작 커밋 `ec12e13`.
+후속 작업 기준은2277aa3이며 현재 차량 수집은 아래의 **기존 자료 USB 복사** 단계를 우선한다.
 현재 목표는 **순정 K8 상태를 읽는 경로와 기존 Lotus 앱의 실제 통신 증거**다.
 엔진사운드 APK 작업과 별개이며 이번 도구는 조명에 접속하거나 송신하지 않는다.
 차량에 접근할 수 없는 동안에는 아래 절차 준비까지만 완료한 것으로 기록한다.
+
+## 현재 차량 수집 단계
+
+사용자가 전달한 화면에는 GL3HEV/kor260902의342/342 resolve, probed, 미매핑1개와
+Map checked가 표시됐다. 원본 JSON과 실제 SML 수신 여부는 대조할 자료가 필요하다.
+이번 차량 작업은 기존 파일 복사 범위다. 아래 Galaxy 색상/밝기 조작 계획은 후속 단계로 보존한다.
+
+사용자 요청에 따라 D드라이브 USB에 수집용 `NEMESIS.data`, `CODEX-collect-k8-ambient.sh`,
+`K8-AMBIENT-README.txt`를 준비했다. 이전 descriptor는 USB의
+`NEMESIS-backup/before-k8-ambient-readonly-*` 아래에 백업했다.
+
+1. 정차·P 상태에서 정상 내비게이션 화면이 나온 뒤 준비한 USB를 꽂는다.
+2. NEMESIS의 USB 실행 확인에 예를 누르고 실행 완료 안내를 기다린다.
+3. USB를 노트북으로 가져와 `K8-AMBIENT-EVIDENCE-*`의 collection.txt와 복사된 JSON을 확인한다.
+
+기존 Car Report와 선택 맵·과거 map-check·HMG 로그·vehicle 로그를 읽어 USB에 저장한다.
+미확보 항목과 복사 실패는 collection.txt에 남는다.
+첫 실행 기록은 확보했지만 크기 확인 실패로0개가 복사됐다. 차량 내부에는 기존 보고서2개가 있었다.
+wc 의존성을 제거한 수정본을 USB에 반영했다. 재실행 후 새 결과 폴더를 확인한다.
+GL3HEV 맵은 제조사 폴더를 탐색해 기존 하위 경로를 보존한다.
+자세한 대상과 실행 형식은 [USB 안내](../tools/usb/README.md)에 있다.
+Hook Map 조작, Check the map, Map this car, Apply changes, Restart unit은 이번 수집에서 금지된다.
+새 모듈·Hook·서비스 설치와 BLE/차량 조명 명령도 현재 수집 범위에서 금지된다.
+
+기존 ADB로 복사하려면 PC에서 다음 명령을 사용한다.
+대상 ID는 이미 허용된 차량 연결을 로컬에서 선택한다.
+
+```powershell
+New-Item -ItemType Directory -Force private/car-report | Out-Null
+adb -s "<기존 K8 연결 ID>" pull /data/hmgapi/public/reports private/car-report
+adb -s "<기존 K8 연결 ID>" pull /data/hmgapi/maps/kia/gl3hev/kor/260902/framework.json private/framework.json
+```
+
+읽기 권한이 없으면 그 결과를 미확인으로 남긴다.
+보고서 생성 명령을 새로 실행하는 대신 기존 JSON의 위치와 화면의 미매핑 지점 이름을 기록한다.
+
+PC의 오프라인 분석 명령은 다음과 같다.
+
+```text
+python tools/car_report_evidence.py "<복사된 기존 Car Report.json>" --framework-map "<복사된 framework.json>"
+```
+
+framework 파일을 확보하지 못했으면 해당 옵션을 생략한다. 요약은 private/car-report-evidence.json에 저장한다.
+분석 결과와 수신 경로 설계는 [K8 SML 분석](research/K8_SML_MAP_CHECK.md)에 있다.
 
 ## PC에서 먼저 준비
 

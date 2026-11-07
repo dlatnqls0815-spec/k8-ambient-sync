@@ -1,7 +1,38 @@
 # 진행 상황
 
-기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **Galaxy 실제 앱 확인 / 실차 통신 기록 대기**다.
+기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **K8 Map checked 화면 정보 확보 / 기존 JSON과 SML 수신 자료 대기**다.
 실제 차량에서 동작하는 완성품 또는 배포용 모듈을 만든 상태는 아니다.
+
+## K8 Map checked 대조와 USB 수집 준비 — 2026-11-07
+
+-2277aa3에서 시작해 원격 codex/device-evidence와 일치함을 확인했다.
+  사용자는 GL3HEV 한국 Gen5W, HMG-API1.0.2, NEMESIS1.16.4를 확인했고 차량 화면에서
+ 342/342 resolve, probed/kor260902, 미매핑1개와 Map checked를 읽어 전달했다.
+  원본 Car Report JSON은 로컬 private 및 연결된 K8 USB에서 발견하지 못했다.
+- HMG-API1.0.2 고정 소스의 CarMap/MapCheck/Report/Input/LightRelay/CarCallbacks를 대조했다.
+  세 SML 후보는 RGB 설정·configuration 설정·상태 요청이다. 방송 수신은 별도 relay 경로다.
+  Input의 loader/class_loader/intercept_key와 기본 진입 Hook도 수신 경로 의존성에 포함된다.
+  Map checked와 맵의 verified 표시, 실행 중 Hook과 실제 이벤트를 각각 구분했다.
+- 이전 로컬 오프라인 후보는330개이며 themesettings.split_item.type이 missing이었다.
+  현재342개 맵과 동일하다고 판정하지 않았다. 현재 미매핑 지점의 이름과 영향은 JSON 대기다.
+- car_report_evidence.py와 합성8개 검사를 추가했다. 기존 Car Report와 선택 framework 사본의
+  후보/항목/누락을 분리하고 private에 요약한다. 실제 장치에 접속하는 기능은 없다.
+- 기존 source-only passive 진단을 재사용하고 RGB3색·밝기 변경·unsigned raw 보존 fake 검사를 추가했다.
+  K8 정규화와 Lotus E1/E2 분기 확인에 연결할 관측 데이터 계약을 K8_SML_MAP_CHECK에 기록했다.
+- 사용자 추가 지시로 D드라이브 USB에 기존 파일 수집용 descriptor·스크립트·안내를 복사하고 해시를 확인했다.
+  이전 descriptor는 NEMESIS-backup/before-k8-ambient-readonly-*에 백업했다.
+  스크립트는 GL3HEV.KOR/260902/API19에서 기존 보고서·맵·map-check·설치 기록·HMG/vehicle 로그를
+  USB에 복사한다.
+- 사용자가 첫 실행을 마친 USB에서 collection.txt를 확보했다. 기존 보고서2개는 찾았지만
+  SIZE_UNAVAILABLE로 복사0개였다. wc 실패 fixture에서 같은 실패를 재현한 뒤 의존성을 제거했다.
+  GL3HEV 맵의 제조사 경로도 탐색하도록 보완했다. 첫 기록은 private에 보관하고 수정본을 USB에 해시 확인 후 반영했다.
+  현재 원본 JSON은 차량에 있어 재실행 결과를 대기한다.
+- python tools/check.py에서 Python55개 중54개 통과/기존 symlink 권한1개 skip,
+  Java 코어139+host14+진단37=190개 통과. 이후 수집기9개 fixture가 통과했다.
+  최종 전체 Python58개 중57개 통과/기존 symlink 권한1개 skip이다.
+  실제 API19 계약 컴파일은 production Java 변경이 없어 이전 결과를 재사용했다.
+- 차량 시스템/맵/설정 변경, 새 Hook·모듈 설치, BLE·차량 조명 명령, map 검사/생성/적용/재시작은 수행하지 않았다.
+  실차의 raw RGB·밝기 수신과 추가 하드웨어 필요 여부는 미확인이다.
 
 ## 후속 진단 준비 — 2026-11-07
 
@@ -56,12 +87,12 @@
   밝기·전원·암호화 분기는 일반화할 수 없다. 실제 선택된 컨트롤러 분기는 미확인이다.
 
 ## 진행 중
-사용자가 현재 차량·조명에 접근할 수 없다고 답했다. 실제 HCI 기록은 다음 정차 시험에 남긴다.
-실행 중인 차량 작업이나 백그라운드 개발 작업은 없다.
+첫 수집 로그는 확보했고 수정한 USB의 재실행과 실제 HCI 자료를 대기한다.
 실제 transport와 raw→K8 정규화 통합은 아래 증거가 확보될 때 진행한다.
 
 ## 미확인
-1. K8 펌웨어·Hook resolve/수신 상태. 상류에는 K8 맵이 없고 US EV6 기록만 있다.
+1. K8의 현재 맵 원본과 미매핑 지점 이름, 실행 중 Hook와 SML 수신 상태.
+   사용자 화면의342/342 resolve를 확보했으며 JSON 대조가 남아 있다.
 2. 순정 테마의 실제 RGB, dim/drive-mode/자동 밝기, 마지막 저장값·현재 출력의 구분.
 3. Gen5W 칩셋·BLE Central/GATT API/권한·통화/미디어/Android Auto 병행.
 4. 실제 APK 서명·실행 중 선택된 통신 분기와 사제 컨트롤러 장치군·UUID·초기화/인증·명령·keepalive.
