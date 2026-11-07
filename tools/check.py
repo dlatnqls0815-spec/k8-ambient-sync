@@ -94,6 +94,7 @@ def main():
     os.chdir(ROOT)
     javac, java = java_tools()
     metadata()
+    run([sys.executable, "-m", "unittest", "discover", "-s", "tests/python", "-p", "test_*.py"])
     files = [p for folder in ("core", "tests/java", "host/src", "host/test")
              for p in (ROOT / folder).rglob("*.java")]
     (ROOT / "build").mkdir(exist_ok=True)
