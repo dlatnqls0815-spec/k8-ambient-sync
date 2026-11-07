@@ -4,6 +4,10 @@
 차량이 정차·P 상태이고 노트북에서 `adb devices -l`에 차량이 `device`로 보일 때 실행한다.
 이 프로젝트는 기존 연결을 읽을 뿐 새 ADB 서비스나 레거시 TCP ADB를 켜지 않는다.
 특히 과거 무선 Android Auto와 충돌한 `persist.service.adb.tcp.enable=1`을 다시 적용하지 않는다.
+과거 차량 기록에서 일반 Wi-Fi 클라이언트는 꺼져 있었지만 무선 Android Auto용 AP는 실행 중이었다.
+당시 OEM Wi-Fi 설정 화면 `com.hkmc.wifisettings/.WifiClientSettings`의 시작은 성공했으나
+Wi-Fi 활성화까지 확인한 것은 아니다. ADB 연결이 없으면 PC에서 이 화면을 열 수 없다.
+일반 Wi-Fi를 켜도 ADB TCP 서비스가 별도로 꺼져 있으면 연결되지는 않는다.
 
 ```powershell
 python tools/collect_k8_adb.py --adb '<PC의 adb.exe 경로>'

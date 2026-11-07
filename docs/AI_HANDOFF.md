@@ -9,6 +9,10 @@ PC의 scrcpy 디렉터리에서 ADB 실행 파일을 찾았지만 현재 `adb de
 USB 수집과 같은 선별 로그·기존 파일을 private에 저장한다. `docs/ADB_COLLECTION.md` 참고.
 현재 수집기를 실행했을 때 차량 미연결로 안전하게 중단됐고 결과 폴더는 만들지 않았다.
 새 ADB fixture 5개, Python 전체 68 pass/1 skip. USB 자동 실행을 다시 요구하지 않는다.
+후속 사용자 요청으로 차량 Wi-Fi를 켜려 했으나 PC에 ADB 연결 0대라 원격 변경은 불가능하다.
+과거 D: 기록은 일반 Wi-Fi 클라이언트 disabled, 무선 AA AP `wlan0` 실행, OEM Wi-Fi 설정
+화면 시작 성공만 보여준다. legacy ADB TCP 속성은 1→0으로 껐고 대체 포트는 기록되지 않았다.
+차량 화면에서 Wi-Fi를 켜더라도 ADB가 자동으로 살아난다고 보장할 수 없다.
 
 ## 사용자 밝기 보정 기준
 
