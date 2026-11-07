@@ -20,6 +20,8 @@ USB에만 결과를 쓴다.
 이번 버전은 system 로그 버퍼의 SystemService 태그를 읽어 SML 응답·RGB 설정·configuration 설정
 문구만 `logs/oem-sml.log`에 보존한다. 기존 캐시를 한 번 읽고 종료한다.
 `oem_logcat_exit=0`과 `oem_sml_log_lines`로 읽기 성공과 관련 로그 유무를 각각 확인한다.
+읽기 전용 `pm list features`와 `ps`는 BLE 선언과 지정된 HMG 프로세스의 순간 관측 여부만
+`collection.txt`에 요약한다. 명령 실패나 해석 불가는 unknown이며 직접 BLE 연결이나 서비스 작동의 증거가 아니다.
 사용자가 이전에 했던 색상·밝기 조작은 완료로 기록돼 있다. 이번에는 기존 캐시 확보를 먼저 진행한다.
 캐시가 순환해 지워졌거나 런타임 출력 조건이 맞지 않으면 해당 파일이 비어 있을 수 있다.
 

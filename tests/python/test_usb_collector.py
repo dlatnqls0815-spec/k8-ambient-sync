@@ -31,7 +31,8 @@ class UsbCollectorTest(unittest.TestCase):
             target.write_text("synthetic-existing-content", encoding="utf-8")
 
     def run_fixture(self, product="GL3HEV.KOR.0000.V000.000.260902", usb_root="/storage/usb0", fail_copy=False, missing_wc=False,
-                    oem_log="", logcat_exit=0):
+                    oem_log="", logcat_exit=0, features="feature:android.hardware.bluetooth_le\n",
+                    feature_exit=0, processes="USER PID PPID NAME\nroot 1 0 init\n", process_exit=0):
         text = SCRIPT.read_text(encoding="utf-8")
         # Retain the production branches and copy operations. The host fixture
         # substitutes only source paths, getprop/pwd and the Android-only PATH.
@@ -47,6 +48,8 @@ class UsbCollectorTest(unittest.TestCase):
             harness += "cp() { return 1; }\n"
         if missing_wc:
             harness += "wc() { return 127; }\n"
+        harness += "pm() { printf '%s' " + shlex.quote(features) + "; return " + str(feature_exit) + "; }\n"
+        harness += "ps() { printf '%s' " + shlex.quote(processes) + "; return " + str(process_exit) + "; }\n"
         harness += 'logcat() { [ "$*" = "-b system -d -v brief -s SystemService:D *:S" ] || return 99;\n'
         harness += "printf '%s' " + shlex.quote(oem_log) + "; return " + str(logcat_exit) + "; }\n"
         return subprocess.run([SHELL], input=harness + text, cwd=self.usb,
@@ -152,6 +155,36 @@ class UsbCollectorTest(unittest.TestCase):
         self.assertIn('oem_sml_log_lines=0', manifest)
         self.assertIn('collection=partial_oem_reader_failure', manifest)
         self.assertEqual('', (output / 'logs/oem-sml.log').read_text())
+
+    def test_readonly_capability_and_process_summary_does_not_retain_raw_output(self):
+        result = self.run_fixture(
+            features="feature:android.hardware.bluetooth_le\nfeature:private_device_name\n",
+            processes="USER PID PPID NAME\nroot 1 0 init\nroot 2 1 hmgapid\nu0_a 3 1 hmgapi.app\nu0_a 4 1 private_process_name\n")
+        self.assertEqual(0, result.returncode, result.stderr)
+        _, manifest = self.manifest()
+        self.assertIn("ble_feature_declared=yes", manifest)
+        self.assertIn("hmgapid_process_snapshot=observed", manifest)
+        self.assertIn("hmg_app_process_snapshot=observed", manifest)
+        self.assertIn("vehicle_service_process=unknown", manifest)
+        self.assertNotIn("private_device_name", manifest)
+        self.assertNotIn("private_process_name", manifest)
+
+    def test_failed_or_malformed_readonly_commands_remain_unknown(self):
+        result = self.run_fixture(features="feature:android.hardware.bluetooth_le\n", feature_exit=1,
+                                  processes="USER PID PPID NAME\nroot 2 1 hmgapid\n", process_exit=1)
+        self.assertEqual(0, result.returncode, result.stderr)
+        _, manifest = self.manifest()
+        self.assertIn("ble_feature_declared=unknown", manifest)
+        self.assertIn("hmgapid_process_snapshot=unknown", manifest)
+        self.assertIn("hmg_app_process_snapshot=unknown", manifest)
+
+    def test_valid_snapshot_reports_unobserved_without_claiming_service_absent(self):
+        result = self.run_fixture(features="feature:android.hardware.bluetooth\n")
+        self.assertEqual(0, result.returncode, result.stderr)
+        _, manifest = self.manifest()
+        self.assertIn("ble_feature_declared=no", manifest)
+        self.assertIn("hmgapid_process_snapshot=not_observed", manifest)
+        self.assertIn("vehicle_service_process=unknown", manifest)
 
     def test_empty_oem_buffer_is_recorded_as_zero_observed_lines(self):
         result = self.run_fixture()

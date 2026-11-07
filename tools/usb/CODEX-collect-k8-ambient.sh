@@ -91,6 +91,64 @@ mkdir -p "$out/logs" || exit 1
  done
  printf '%s\n' "$oem_lines" > "$out/logs/oem-sml-count.txt"
 } > "$out/logs/oem-sml.log"
+# Read-only snapshots; keep only declarations and exact process-name observations.
+# A missing match is only a snapshot, not proof of a service state.
+ble_declared=unknown
+feature_output=$(pm list features 2>/dev/null)
+feature_exit=$?
+if [ "$feature_exit" -eq 0 ]; then
+ feature_seen=0
+ ble_declared=unknown
+ while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+   feature:*) feature_seen=1 ;;
+  esac
+  case "$line" in
+   feature:android.hardware.bluetooth_le|feature:android.hardware.bluetooth_le=*) ble_declared=yes ;;
+  esac
+ done <<EOF
+$feature_output
+EOF
+ if [ "$feature_seen" -eq 1 ] && [ "$ble_declared" = unknown ]; then ble_declared=no; fi
+fi
+
+hmgapid_process=unknown
+hmg_app_process=unknown
+process_output=$(ps 2>/dev/null)
+process_exit=$?
+if [ "$process_exit" -eq 0 ]; then
+ process_header=0
+ process_rows=0
+ while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+   *USER*PID*NAME*) process_header=1; continue ;;
+  esac
+  [ -n "$line" ] || continue
+  process_rows=$((process_rows+1))
+  case "$line" in
+   *' hmgapid'|*' /data/hmgapi/bin/hmgapid') hmgapid_process=observed ;;
+   *' hmgapi.app') hmg_app_process=observed ;;
+  esac
+ done <<EOF
+$process_output
+EOF
+ if [ "$process_header" -eq 1 ] && [ "$process_rows" -gt 0 ]; then
+  [ "$hmgapid_process" = unknown ] && hmgapid_process=not_observed
+  [ "$hmg_app_process" = unknown ] && hmg_app_process=not_observed
+ else
+  hmgapid_process=unknown
+  hmg_app_process=unknown
+ fi
+fi
+{
+ echo "ble_feature_declared=$ble_declared"
+ echo "ble_feature_command_exit=$feature_exit"
+ echo "hmgapid_process_snapshot=$hmgapid_process"
+ echo "hmg_app_process_snapshot=$hmg_app_process"
+ echo "process_command_exit=$process_exit"
+ echo 'vehicle_service_process=unknown'
+} >> "$manifest"
+
 read -r oem_exit < "$out/logs/oem-reader-exit.txt" || oem_exit=unknown
 read -r oem_lines < "$out/logs/oem-sml-count.txt" || oem_lines=0
 {
