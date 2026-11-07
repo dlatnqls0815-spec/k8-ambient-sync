@@ -73,19 +73,43 @@ collect "/data/hmgapi/state/map-check.json" state/map-check.json
 collect "/data/hmgapi/installed.txt" installed.txt
 collect "/data/hmgapi/logs/hmgapi/log.log" logs/hmgapi.log
 collect "/data/hmgapi/logs/hmgapi/vehicle.log" logs/vehicle.log
+
+# Existing OEM buffer only. Restrict both the log tag and the retained messages.
+mkdir -p "$out/logs" || exit 1
+{
+ logcat -b system -d -v brief -s SystemService:D '*:S'
+ printf '%s\n' "$?" > "$out/logs/oem-reader-exit.txt"
+} 2> "$out/logs/oem-reader-errors.txt" | {
+ oem_lines=0
+ while IFS= read -r record || [ -n "$record" ]; do
+  case "$record" in
+   *SYS_SML_STATUS_M_RESP:*|*'[SystemService.setSMLRGB] red:'*|*'[SystemService.setSMLConfiguration] mode:'*)
+    printf '%s\n' "$record"
+    oem_lines=$((oem_lines+1))
+    ;;
+  esac
+ done
+ printf '%s\n' "$oem_lines" > "$out/logs/oem-sml-count.txt"
+} > "$out/logs/oem-sml.log"
+read -r oem_exit < "$out/logs/oem-reader-exit.txt" || oem_exit=unknown
+read -r oem_lines < "$out/logs/oem-sml-count.txt" || oem_lines=0
 {
  echo "copied_files=$copied"
  echo "unavailable_files=$unavailable"
  echo "copy_failures=$failed"
  echo "matching_map_folders=$maps_found"
- if [ "$copied" -eq 0 ]; then
+ echo "oem_logcat_exit=$oem_exit"
+ echo "oem_sml_log_lines=$oem_lines"
+ if [ "$copied" -eq 0 ] && [ "$oem_lines" -eq 0 ]; then
   echo 'collection=no_existing_files'
  elif [ "$failed" -ne 0 ]; then
   echo 'collection=partial_copy_failure'
+ elif [ "$oem_exit" != 0 ]; then
+  echo 'collection=partial_oem_reader_failure'
  else
   echo 'collection=finished'
  fi
  echo 'Inspect available files before judging Hook or event status.'
 } >> "$manifest"
 sync
-[ "$failed" -eq 0 ] && [ "$copied" -gt 0 ]
+[ "$failed" -eq 0 ] && [ "$oem_exit" = 0 ] && { [ "$copied" -gt 0 ] || [ "$oem_lines" -gt 0 ]; }

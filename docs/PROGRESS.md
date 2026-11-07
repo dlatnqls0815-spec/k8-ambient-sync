@@ -3,6 +3,24 @@
 기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **K8 JSON·선택 맵 확보 / SML 배열 전달 시도 흔적 확인**이다.
 실제 차량에서 동작하는 완성품 또는 배포용 모듈을 만든 상태는 아니다.
 
+## OEM 로그 캐시 수집 보완 — 2026-11-07
+
+- 이전 수동 변경은 수행 완료로 유지하고 원시값 기록 경로를 조사했다.
+  기존 automotive-service/automotive ODEX의 MD5가 실제 맵의 파일 목록과 일치한다.
+- REA의 caller-supplied JADX provider가 없어 기존 Android SDK dexdump와 로컬 DEX 메타데이터를 사용했다.
+  최적화된 DEX의 class flags 때문에 분석 파생본의 검증을 건너뛰었고 quick opcode 일부는 미해석이다.
+  선택한 문자열과 정적 호출만 근거로 삼았다.
+- SystemService SML 응답의 byteToHexString/Slog.d, RGB 및 configuration 설정 로그 위치를 확인했다.
+  순정 system 버퍼에 해당 출력이 남으면 값을 확보할 수 있다. 런타임 출력/캐시 잔존은 아직 미확인이다.
+- 수집기에 SystemService의 기존 system 버퍼를 읽는 logcat -d를 추가했다.
+  세 SML 문구만 builtin read/case로 선별하고 종료 코드·줄 수·원본을 USB에 남긴다.
+  기존 HMG 파일 복사와 구분해 oem_logcat_exit/oem_sml_log_lines로 검사한다.
+  기존 USB 스크립트와 안내를 백업한 뒤 D드라이브에 복사하고 SHA256을 대조했다.
+  이 보완판의 실제 OEM 로그 확보는 차량 실행 결과를 대기한다.
+- Python61개 중60개 통과/기존 symlink 권한1개 skip, collector12개 fixture와 셸 구문 검사가 통과했다.
+  고정 read-only 인자, 관련 문구만 보존, 읽기 실패와0건 캐시를 검사했다.
+  Java/API19 검증은 변경이 없어 이전 결과를 재사용했다.
+
 ## USB 재수집 분석 — 2026-11-07
 
 - 사용자가 이전 RGB·밝기 수동 변경을 이미 수행했다고 확인했다.

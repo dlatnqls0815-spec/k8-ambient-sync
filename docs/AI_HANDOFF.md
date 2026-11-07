@@ -2,6 +2,20 @@
 
 ## 최신 작업
 
+원시값 보존을 위해 기존 시스템 사본의 OEM 로그 경로를 조사했다.
+automotive-service/automotive ODEX는 실제 car.json의 파일 MD5와 일치한다.
+REA JADX provider 미설정으로 로컬 Android SDK dexdump와 DEX 메타데이터를 사용했다.
+파생 DEX의 최적화 class flags/quick opcode 제한 때문에 전체 제어 흐름 복원은 미확인이다.
+SystemService 태그의 SYS_SML_STATUS_M_RESP, setSMLRGB, setSMLConfiguration 출력 위치를 확인했다.
+근거·offset·제한은 docs/research/K8_OEM_SML_LOG.md에 있다. 바이너리와 전체 출력은 private다.
+
+USB 수집기에 logcat -b system -d -v brief -s SystemService:D '*:S'와 builtin read/case 필터를 추가했다.
+기존 캐시의 세 문구만 logs/oem-sml.log에 보존하고 종료 코드와 줄 수를 별도 기록한다.
+기존 D드라이브 collector/안내를 NEMESIS-backup/before-oem-sml-log-*에 백업하고 검증본으로 교체했다.
+실제 raw 값은 다음 실행 전까지 미확인이다. 이미 한 색상·밝기 조작을 반복하는 안내는 하지 않는다.
+현재 Python61개 중60개 통과/기존 symlink1개 skip이며 collector12개 fixture를 포함한다.
+Java는 변경이 없어 기존190개와 API19 계약 검증을 재사용한다.
+
 사용자가 이전에 RGB 색상과 밝기를 직접 변경하는 조작을 이미 했다고 재확인했다.
 수동 변경은 완료된 조작으로 기록한다. 재수행을 기본 다음 단계로 안내하지 않는다.
 확보 로그를 다시 검색했지만 raw RGB/brightness/SML hex 값은 없었다.

@@ -30,7 +30,8 @@ class UsbCollectorTest(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("synthetic-existing-content", encoding="utf-8")
 
-    def run_fixture(self, product="GL3HEV.KOR.0000.V000.000.260902", usb_root="/storage/usb0", fail_copy=False, missing_wc=False):
+    def run_fixture(self, product="GL3HEV.KOR.0000.V000.000.260902", usb_root="/storage/usb0", fail_copy=False, missing_wc=False,
+                    oem_log="", logcat_exit=0):
         text = SCRIPT.read_text(encoding="utf-8")
         # Retain the production branches and copy operations. The host fixture
         # substitutes only source paths, getprop/pwd and the Android-only PATH.
@@ -46,6 +47,8 @@ class UsbCollectorTest(unittest.TestCase):
             harness += "cp() { return 1; }\n"
         if missing_wc:
             harness += "wc() { return 127; }\n"
+        harness += 'logcat() { [ "$*" = "-b system -d -v brief -s SystemService:D *:S" ] || return 99;\n'
+        harness += "printf '%s' " + shlex.quote(oem_log) + "; return " + str(logcat_exit) + "; }\n"
         return subprocess.run([SHELL], input=harness + text, cwd=self.usb,
                               text=True, encoding="utf-8", capture_output=True, timeout=20)
 
@@ -126,6 +129,36 @@ class UsbCollectorTest(unittest.TestCase):
         _, manifest = self.manifest()
         self.assertIn("copy_failures=7", manifest)
         self.assertIn("copied_files=0", manifest)
+
+    def test_oem_capture_keeps_only_sml_messages_with_a_readonly_dump(self):
+        events = [
+            'D/SystemService( 123): [MicomEventHandler.handleMessage] SYS_SML_STATUS_M_RESP: 0x00 0xff 0x00 0x00 0x00 0x00 0x06 0x00 0x00',
+            'D/SystemService( 123): [SystemService.setSMLRGB] red: 0x00 0xff , green: 0x00 0x00 , blue: 0x00 0x00 , called by 456',
+            'D/SystemService( 123): [SystemService.setSMLConfiguration] mode: 5, data: 6, called by 456',
+        ]
+        result = self.run_fixture(oem_log='D/SystemService( 123): SYNTHETIC_UNRELATED_PRIVATE_DETAIL\n' + '\n'.join(events) + '\n')
+        self.assertEqual(0, result.returncode, result.stderr)
+        output, manifest = self.manifest()
+        self.assertEqual('\n'.join(events) + '\n', (output / 'logs/oem-sml.log').read_text())
+        self.assertIn('oem_logcat_exit=0', manifest)
+        self.assertIn('oem_sml_log_lines=3', manifest)
+        self.assertNotIn('SYNTHETIC_UNRELATED_PRIVATE_DETAIL', (output / 'logs/oem-sml.log').read_text())
+
+    def test_oem_reader_failure_is_not_reported_as_a_complete_collection(self):
+        result = self.run_fixture(logcat_exit=127)
+        self.assertNotEqual(0, result.returncode)
+        output, manifest = self.manifest()
+        self.assertIn('oem_logcat_exit=127', manifest)
+        self.assertIn('oem_sml_log_lines=0', manifest)
+        self.assertIn('collection=partial_oem_reader_failure', manifest)
+        self.assertEqual('', (output / 'logs/oem-sml.log').read_text())
+
+    def test_empty_oem_buffer_is_recorded_as_zero_observed_lines(self):
+        result = self.run_fixture()
+        self.assertEqual(0, result.returncode, result.stderr)
+        _, manifest = self.manifest()
+        self.assertIn('oem_logcat_exit=0', manifest)
+        self.assertIn('oem_sml_log_lines=0', manifest)
 
 
 if __name__ == "__main__":

@@ -91,3 +91,12 @@ host의 POSIX 셸을 사용하며 getprop/pwd/Android PATH와 source root를 가
 수정본9개와 스크립트 구문 검사를 통과했다.
 마지막 전체 Python 검사58개 중57개 통과, 기존 symlink 권한1개 skip이다.
 production Java 변경이 없어 API19 계약 컴파일은 기존 통과 결과를 재사용했다.
+
+## OEM SML 캐시 수집 보완
+
+전체 Python61개 중60개 통과, 기존 symlink 권한 검사1개 skip이다.
+collector12개 fixture는 기존9개에 SystemService system 버퍼의 고정 dump 인자,
+세 문구만 보존하는 필터, reader 실패와 빈 캐시 기록을 추가로 확인한다.
+셸 구문과 diff 공백 검사도 통과했다.
+실제 OEM 로그의 존재·런타임 출력 조건과 원시값은 다음 USB 실행에서 확인한다.
+Java190개와 API19 계약 검증은 해당 소스 변경이 없어 재사용했다.

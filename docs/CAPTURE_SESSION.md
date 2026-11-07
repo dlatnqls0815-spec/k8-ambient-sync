@@ -8,6 +8,12 @@
 
 ## 현재 차량 수집 단계
 
+다음 USB 버전은 system 버퍼의 SystemService SML 캐시를 logs/oem-sml.log에 추가로 저장한다.
+정차·P 상태에서 USB를 실행해 완료 안내 후 노트북으로 가져온다.
+이전 색상·밝기 변경은 완료로 유지하며 이번에는 기존 캐시 확보를 먼저 한다.
+collection.txt의 oem_logcat_exit와 oem_sml_log_lines를 확인한다.
+출력 코드와 조건은 [순정 SML 로그 분석](research/K8_OEM_SML_LOG.md)에 기록했다.
+
 수정본의 재실행 자료를 확보했다. 기존 보고서2개 등7개 파일이 복사됐고 원본은 private에 보관했다.
 미매핑 ID와 SML 매핑은 대조를 마쳤으며 추가 수집보다 기존 로그의 해석을 우선한다.
 원시 RGB·밝기와 현재 서비스 상태는 남은 확인 항목이다.
