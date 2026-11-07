@@ -86,7 +86,8 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 2. **차량 1회 방문:** [최종 현장 확인표](NEXT_PARKED_VISIT.md)를 그대로 진행한다.
 3. 방문 후: raw1 소등이 확인되면 `toK8ProvisionalBrightnessPercent()`를 제거하고 OFF 사다리로 일원화한다.
    전원 프레임이 HCI와 맞으면 `forLotusWithStaticPower`를 기본 Lotus 경로로 올린다.
-   설치 로그로 원인이 확정되면 A안(직접 BLE) 진행 여부를 판단한다.
+   설치 거부는 OEM 서명자 허용 목록으로 확인됐다([근거](research/GEN5W_INSTALL_ALLOWLIST.md)).
+   진단 APK를 NEMESIS 패키지(`kind=apk`)로 만들어 승인 후 설치하고 BLE 탐색 결과로 A안을 판단한다.
 
 ## 코드와 근거의 위치
 

@@ -1,5 +1,12 @@
 # 진행 상황
 
+## 진단 APK 설치 거부 원인 확인 — 2026-11-07 밤
+
+- NEMESIS 공식 문서 04-Packages(`345f171`): 부팅 완료 상태에서 OEM 허용 목록 밖 서명자는
+  처음 설치하는 패키지도 `INCONSISTENT_CERTIFICATES`로 거부된다. 우리 증상과 정확히 같다.
+- 해결 경로는 NEMESIS 패키지 `kind=apk`(설치 순간만 `sys.boot_completed=0`). 모듈 설치라 사용자 승인 필요.
+- 설치 로그 수집·`services.odex` pull 단계는 확인표에서 뺐다. [근거](research/GEN5W_INSTALL_ALLOWLIST.md).
+
 ## 남은 PC 분석 마무리(Claude Code) — 2026-11-07 밤
 
 - baksmali로 OEM DEX를 다시 풀었다. `0x15E` 이름은 `SML_MOOD_FLOOR_MODE_THEM_BRIGHT`이고, SystemService는 mode/data·RGB를 해석 없이 전달한다.

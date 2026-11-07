@@ -8,7 +8,8 @@
 6. 독립 BLE 진단 APK는 두 서명 형식 모두 차량에서
    `INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES`로 설치 거부됐다.
    차량에 진단 패키지는 등록되지 않았고 직접 GATT 시험은 대기 중이다.
-   PC 재분석상 APK 자체는 정상이며 제조사 설치 정책이 유력하다. 설치 로그로 확정 전이다.
+   원인: NEMESIS 공식 문서에 적힌 OEM 서명자 허용 목록(부팅 완료 상태의 일반 `pm` 거부)이다.
+   NEMESIS 패키지(`kind=apk`)로 설치해야 한다. [설치 거부 원인](research/GEN5W_INSTALL_ALLOWLIST.md)
 7. GitHub 동기화를 재개했다. 다른 PC에서는 현재 구현 브랜치 `codex/device-evidence`를 사용한다.
 8. PC 파일 저장은 구현했지만 차량용 영구 저장·자동실행·종료 복구는 아직 통합하지 않았다.
 9. 진단의 system_server 설정/OFF 콜백 전달과 QuickBoot 수명은 미검증이다.

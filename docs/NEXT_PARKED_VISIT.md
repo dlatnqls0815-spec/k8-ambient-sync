@@ -33,10 +33,9 @@ SmartThings 같은 BLE 앱 조작과 휴대폰 재부팅·Bluetooth 끄기는 4�
 |---|---|---|---|
 | 1 | 무선 ADB 연결 후 `tools/watch_k8_sml_adb.py` 감시 시작 | SML 로그 | 2의 raw 값 |
 | 2 | 순정 앰비언트 **꺼짐 → 1단계 → 꺼짐** | 각 조작 시 실제 소등/점등 여부와 시각 | raw1=OFF 확정, 임시 함수 제거 |
-| 3 | 진단 APK 설치 **1회**, 바로 PackageManager 로그 저장(5-5, 1장 명령) | install-logcat.txt | 설치 거부 원인 |
-| 3-1 | (선택, 별도 승인) `services.jar`/`services.odex` 읽기 전용 pull | private 사본 | `-104` 설정 위치 정적 확인 |
+| 3 | (사용자 승인 후) 진단 APK를 **NEMESIS 패키지**로 설치하고 BLE 탐색 1회 실행. 끝나면 Manager에서 제거 가능 | 진단 결과 파일 | 차량 직접 BLE 가능 여부 |
 | 4 | Lotus 앱에서 **전원 끄기 → 켜기**, 바로 그 자리에서 Galaxy 버그 보고서 생성 | 보고서 ZIP, 조명 반응·시각 | 정적 전원 프레임과 HCI 대조 |
 | 5 | 원래 설정(드림퍼플·평소 밝기)으로 복원 | — | — |
 
 이미 확보한 RGB, 5/10/15/20%, 테마 선택 조작은 반복하지 않는다.
-3에서 설치가 다시 거부되면 재서명은 시도하지 않는다. 설치가 성공하면 사용자 승인 범위에서 GATT 탐색 1회를 진행한다.
+설치 거부 원인은 OEM 서명자 허용 목록으로 확인됐다([근거](research/GEN5W_INSTALL_ALLOWLIST.md)). 일반 `adb install`·재서명은 다시 시도하지 않는다.
