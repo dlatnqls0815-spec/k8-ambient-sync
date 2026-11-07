@@ -36,4 +36,15 @@ python tools/check.py
 기준 저장소: https://github.com/dlatnqls0815-spec/k8-ambient-sync (비공개).
 현재 사용자의 선택에 따라 원격 변경 없이 로컬에서 작업한다.
 
+노트북 이동용으로 현재 커밋과 브랜치를 담은 `dist/k8-ambient-sync-local.bundle`을 별도 생성했다.
+이 파일을 옮긴 뒤 **새 빈 폴더 이름**으로 복제한다. 기존 작업 폴더 위에 복제하지 않는다.
+
+```text
+git clone -b codex/bootstrap-offline-sync k8-ambient-sync-local.bundle k8-ambient-sync
+git -C k8-ambient-sync remote set-url origin https://github.com/dlatnqls0815-spec/k8-ambient-sync.git
+```
+
+묶음에는 원본 조사 저장소·SDK/JDK·캡처·빌드 결과가 없다. JDK8/Python은 각 PC에 준비한다.
+원격 Push 권한과 인증을 새로 설정하거나 실행하는 절차는 포함하지 않는다.
+
 새 코드의 라이선스는 AGPL version 3이며 [NOTICE](NOTICE.md)에 외부 자료의 출처를 기록했다.
