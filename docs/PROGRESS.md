@@ -1,6 +1,6 @@
 # 진행 상황
 
-기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **오프라인 기반 구현 완료 / 실차 통합 대기**다.
+기준일: 2026-11-07 (Asia/Seoul). 현재 단계는 **Galaxy 실제 앱 확인 / 실차 통신 기록 대기**다.
 실제 차량에서 동작하는 완성품 또는 배포용 모듈을 만든 상태는 아니다.
 
 ## 완료
@@ -20,42 +20,59 @@
 - passive 진단 Hook 소스와 `.disabled`/diagnostics=false 기본값을 만들었다.
   실제 수신기 코드는 fake에서 검사하고 실제 Android/HMG 소스와도 별도로 컴파일했다.
 - 정차 상태 Galaxy HCI 수집·익명 요약·Gen5W 읽기 진단·후속 승인 조건을 문서화했다.
+- 후속 단계에서 사용자 요청대로 Galaxy에 기존 무선 ADB로 연결했다.
+  Android 17/API37, LotusLamp X `com.szelk.ledlamppro` 5.21.03(425), BLE feature 선언을 실제로 읽었다.
+  이 선언은 Gen5W BLE나 실제 컨트롤러 연결 성공의 증거가 아니다.
+- 고정 앱 base APK만 로컬 private에 확보했다. 269,476,264바이트,
+  SHA256 `d0eca36d1f1bd47b0647a47d27e68fedcd57118932d8a73f4f15317b117749e2`.
+  APK·원본 DEX·설치 경로·IP·기기 serial·원본 dump는 커밋하지 않는다.
+- 읽기 전용 Galaxy 버전 수집 도구와 TShark 선별 ATT TSV 분석 도구를 만들었다.
+  출력은 private에 제한하고 후보 형식·연결 세션·입력 범위·정보 비출력을 검사한다.
+- 실제 설치본의 E1/E2 builder·조건부 암호화·GATT write와 FFF0/FFF3 기본값 경로를 DEX 위치로 확인했다.
+  [설치본 분석](research/LOTUS_APK_5_21_03.md)에 근거를 남겼다. RGB 일부가 공개 후보와 일치하지만
+  밝기·전원·암호화 분기는 일반화할 수 없다. 실제 선택된 컨트롤러 분기는 미확인이다.
 
 ## 진행 중
-로컬 구현·검사는 종료했다. 실행 중인 차량 작업이나 백그라운드 개발 작업은 없다.
+사용자가 현재 차량·조명에 접근할 수 없다고 답했다. 실제 HCI 기록은 다음 정차 시험에 남긴다.
+실행 중인 차량 작업이나 백그라운드 개발 작업은 없다.
 실제 transport와 raw→K8 정규화 통합은 아래 증거가 확보될 때 진행한다.
 
 ## 미확인
 1. K8 펌웨어·Hook resolve/수신 상태. 상류에는 K8 맵이 없고 US EV6 기록만 있다.
 2. 순정 테마의 실제 RGB, dim/drive-mode/자동 밝기, 마지막 저장값·현재 출력의 구분.
 3. Gen5W 칩셋·BLE Central/GATT API/권한·통화/미디어/Android Auto 병행.
-4. 실제 Galaxy APK 버전/서명과 사제 컨트롤러 장치군·UUID·초기화/인증·명령·keepalive.
+4. 실제 APK 서명·실행 중 선택된 통신 분기와 사제 컨트롤러 장치군·UUID·초기화/인증·명령·keepalive.
 5. 시동/QuickBoot 자동실행, system_server 설정/OFF 전달, 차량용 영구 저장과 실제 재연결 수명.
 6. 실제 광색/밝기 대응, 안전한 전송 간격, 종단 200ms 성능. 50ms는 모의 간격일 뿐이다.
 
 ## 테스트
 - `python tools/check.py --diagnostic` **성공**.
 - 코어 139 + host 복원 14 + 진단 fake 26 = **179개 assert 검사 통과**.
+- 기기 자료 도구 추가 후 `python tools/check.py` 성공: Python unittest 31개 중 **30개 통과/1개 skip**,
+  기존 Java 179개 검사 통과. 실제 Windows 디렉터리 symlink 생성은 권한 부족으로 skip했다.
+  Java 소스는 변경하지 않아 API19 계약 컴파일을 다시 수행하지 않았다.
 - Java7 코어·진단을 실제 API19 bootclasspath와 HMG-API 1.0.2 전체 runtime 소스에 대조해 컴파일했다.
   프로젝트 코드 경고 없음. 상류 runtime의 기존 unchecked/serial 경고 8개는 남아 있다.
 - 독립 검토가 연속 RGB 변경의 밝기 starvation을 재현했다. 실패하는 회귀검사 확인 후 공정 처리로 수정했다.
   전송 중 최신 이벤트를 이미 보냈다고 오인하지 않도록 상태 snapshot도 검사한다.
 - Git diff 공백 검사 통과. 원본 조사·도구·캡처·로그·빌드 디렉터리는 추적하지 않는다.
-- **실행하지 않음:** 차량/휴대폰 접속, BLE scan/connect/write, 상태 요청/Binder/CAN/LIN 명령,
+- **실행하지 않음:** 차량·조명 접속, BLE scan/connect/write, 상태 요청/Binder/CAN/LIN 명령,
   시스템·펌웨어 수정, DEX 패키징/서명/설치, 실차 성능 시험.
 
 ## GitHub
 - 기준 원격: `https://github.com/dlatnqls0815-spec/k8-ambient-sync.git`.
 - main 초기 기준: `4348d3a` — 프로젝트 규칙·필수 문서.
-- 작업 브랜치: `codex/bootstrap-offline-sync`.
+- 초기 작업 브랜치: `codex/bootstrap-offline-sync`.
+- 현재 작업 브랜치: `codex/device-evidence` (원격 최신 bootstrap에서 분기).
+- 기기 자료 도구 커밋: `4e1d20e` — 읽기 전용 수집·로컬 분석과 합성 테스트.
 - 조사 커밋: `3f529d9` — 소스 근거·진단 절차·라이선스.
 - 구현 커밋: `9a3b8b2` — 코어·host·진단 소스·검사 도구와 테스트.
 - 이 진행 기록과 README의 후속 커밋은 `git log -1`로 확인한다.
 - 커밋 작성자는 Codex다. 전역 Git 설정/로그인/provider/MCP를 변경하지 않았다.
 - GitHub 로그인 확인 후 초기 main과 작업 브랜치의 원격 동기화를 재개했다.
   강제 Push/PR/merge는 하지 않는다. GitHub 업로드와 Codex Cloud 환경 연결은 별도이며 후자는 미설정이다.
-- 로그인 후 변경은 문서뿐이다. 기존 179개 검사/API19 컴파일 결과를 유지하고 동일 검사는 반복하지 않는다.
-  업로드 전 전체 커밋에서 민감정보 패턴·바이너리·제외 디렉터리 추적을 재점검했다.
+- 로그인 직후 동기화 작업은 문서만 변경했다. 이후 기기 자료 도구를 별도 브랜치에 추가했다.
+  업로드 전 민감정보 패턴·바이너리·제외 디렉터리 추적을 재점검한다.
 - `dist/k8-ambient-sync-local.bundle`은 PC 이동용 export다. GitHub를 대신하는 기준 저장소가 아니다.
   최종 문서 커밋 후 생성하고 `git bundle verify`로 확인한다. 복제 방법은 README에 있다.
 
@@ -64,6 +81,7 @@
    K8에서 passive 수신 소스를 설치할 수 있는지 판단할 최소 자료다.
 2. Galaxy 기존 공식 앱으로 정상 조작한 HCI를 로컬 비공개 폴더에 수집한다.
    원본을 외부 AI/저장소에 보내지 않고 필요한 조명 제어 동작만 익명 요약한다.
+   현재 사용자는 차량에 접근할 수 없으므로 수집을 진행하지 않았다.
 3. 기존 승인된 Gen5W 진단 환경에서 BLE 노출을 읽기 전용으로 확인한다.
 4. K8 상태 매핑·대상 프로토콜을 확정한다. 설치물/롤백을 준비한 뒤 사용자 확인을 받아 정차 시험한다.
    확인 전에는 실제 송신을 추가하지 않는다.

@@ -16,5 +16,9 @@ HMG-API와 연결하는 진단 모드도 같은 라이선스를 사용한다.
 라이선스가 확인되지 않은 Gen5W Ambient Sound와 l0lsec/LotusLampX의 코드는 재사용하지 않았다.
 전체 조사 출처와 조건은 `docs/research/`에 SHA 고정 링크로 남겼다.
 
+후속 분석에서 본인 Galaxy의 LotusLamp X base APK를 로컬 `private/`에만 읽어 보관했다.
+앱 구현·리소스·인증 자료는 저장소에 포함하지 않는다. 문서에는 버전·해시·메서드 위치와
+통신 구조에 관한 분석 사실만 남긴다. 해당 앱의 코드를 프로젝트 소스로 재사용하지 않는다.
+
 공식 Temurin JDK와 Android API19 컴파일 자료는 로컬 `.tools/`에만 보관한다.
 컴파일 중 사용한 HMG-API 클래스와 테스트 출력은 `build/`에만 남기며 배포하지 않는다.

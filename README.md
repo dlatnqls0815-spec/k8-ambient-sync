@@ -35,17 +35,17 @@ python tools/check.py
 
 기준 저장소: https://github.com/dlatnqls0815-spec/k8-ambient-sync (비공개).
 GitHub 인증 확인 후 원격 동기화를 재개했다. 초기 기준은 `main`, 현재 구현은
-`codex/bootstrap-offline-sync`에 있다. 다른 PC에서는 작업 브랜치를 명시해 복제한다.
+`codex/device-evidence`에 있다. 다른 PC에서는 작업 브랜치를 명시해 복제한다.
 
 ```text
-git clone -b codex/bootstrap-offline-sync https://github.com/dlatnqls0815-spec/k8-ambient-sync.git
+git clone -b codex/device-evidence https://github.com/dlatnqls0815-spec/k8-ambient-sync.git
 ```
 
 노트북 이동용으로 현재 커밋과 브랜치를 담은 `dist/k8-ambient-sync-local.bundle`을 별도 생성했다.
 이 파일을 옮긴 뒤 **새 빈 폴더 이름**으로 복제한다. 기존 작업 폴더 위에 복제하지 않는다.
 
 ```text
-git clone -b codex/bootstrap-offline-sync k8-ambient-sync-local.bundle k8-ambient-sync
+git clone -b codex/device-evidence k8-ambient-sync-local.bundle k8-ambient-sync
 git -C k8-ambient-sync remote set-url origin https://github.com/dlatnqls0815-spec/k8-ambient-sync.git
 ```
 
@@ -53,3 +53,13 @@ git -C k8-ambient-sync remote set-url origin https://github.com/dlatnqls0815-spe
 묶음은 오프라인 이동 대안이다. GitHub 인증은 각 PC에서 별도로 확인한다.
 
 새 코드의 라이선스는 AGPL version 3이며 [NOTICE](NOTICE.md)에 외부 자료의 출처를 기록했다.
+
+## 다음 실측 준비
+
+[기기 자료 도구](docs/EVIDENCE_TOOLS.md)에서 Galaxy의 OS/앱 버전을 읽고
+로컬 TShark ATT export를 분석하는 방법을 제공한다.
+`phone_probe.py`는 승인된 USB 또는 무선 ADB 연결만 사용하고,
+`att_evidence.py`는 이미 저장된 TSV만 읽는다. 결과는 `private/`에만 저장한다.
+실제 Galaxy에서 LotusLamp X 5.21.03(425), Android 17/API37 메타데이터를 확인했다.
+실제 컨트롤러의 패킷·UUID·초기화는 차량에 접근 가능한 다음 정차 시험에서 확인한다.
+[설치본 분석](docs/research/LOTUS_APK_5_21_03.md)에서 E1/E2·조건부 암호화·GATT 호출 위치를 확인했다.

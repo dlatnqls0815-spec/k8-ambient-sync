@@ -1,6 +1,7 @@
 # 테스트
 
-`python tools/check.py`로 코어 컴파일, assert 기반 동작 검사, 문서/메타데이터 검사를 실행한다.
+`python tools/check.py`로 Python 자료 도구 검사, 코어 컴파일, assert 기반 동작 검사,
+문서/메타데이터 검사를 실행한다.
 JDK 8과 Python 3.9+ 외 의존성은 없다. 자세한 검사 결과는 PROGRESS에 기록한다.
 
 2026-11-07 검증: 코어 **139**, host **14**, 진단 fake **26** = **179개 검사 통과**.
@@ -42,3 +43,20 @@ Android API19 archive는 Google 공식 repository 메타데이터의 SHA-1과 �
 
 실차 검증 순서는 펌웨어/복구/백업 확인 → Hook 읽기 → Galaxy 기존 앱 통신 확인 →
 Gen5W 수동 기능 조회 → 대상 확인 후 별도 승인된 BLE 시험이다.
+
+## 기기 자료 도구 검사
+
+```text
+python -m unittest discover -s tests/python -p "test_*.py"
+```
+
+Galaxy 도구는 모의 ADB로 대상 혼동/미승인 연결/비차량 제한, 버전·BLE 선언 파싱,
+식별자·오류 원문 비출력, 출력 경계와 기존 파일 보존을 검사한다.
+ATT 도구는 합성 TSV로 정확한 후보 형식·입력 범위·다중 occurrence 거부,
+재연결 handle 재사용·미확인 세션·unknown payload 비출력을 검사한다.
+실제 Windows 디렉터리 심볼릭 링크 생성 검사는 권한이 없으면 skip으로 명시한다.
+테스트 자체는 휴대폰/네트워크/실제 로그에 접근하지 않는다.
+
+별도의 수동 검증으로 Galaxy 무선 연결 후 고정 패키지의 실제 OS/버전 정보를 읽었다.
+이 성공은 실차 컨트롤러의 프로토콜·연결·실제 조명 반영을 증명하지 않는다.
+현재 실제 HCI export가 없어 TShark→실측 TSV 전체 경로는 아직 검증하지 않았다.
