@@ -1,5 +1,20 @@
 # 진단 준비 인계 — 2026-11-07
 
+## 정차 실측과 진단 APK 설치 결과
+
+승인받은 무선 ADB로 대상 K8/API19를 확인했다. BLE 기능 선언과
+`bluetooth_manager` 서비스, `bluetooth_on=1` 및 Android Bluetooth 패키지를 확인했다.
+직접 GATT 연결은 미확인이다. 기존 v1/v2 APK와 동일 인증서·동일 코드의
+SHA-1/RSA v1 전용 APK 모두 차량 패키지 관리자가
+`INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES`로 거부했다.
+진단 패키지가 등록되지 않은 것을 확인했고 설치용 임시 파일을 정리했다.
+
+순정 OFF → 최저 → 테마/직접색 요청에 맞춰 SML 로그 22줄을 수집했다.
+모드 5의 data 1→2와 RGB 요청 1건이 있었다. 사용자는 선호 테마를 드림퍼플로
+알려줬고 원래 설정으로 복원했다. 기존 캡처의 화면 단계와 raw 값 대응은 다시 확인해야 한다.
+이번 RGB 요청만으로 테마와 직접색을 각각 식별할 수는 없다.
+원본은 `private/vehicle-adb/K8-AMBIENT-PARKED-OFF-THEME/`에 있다.
+
 ## 다음 정차 방문 준비
 
 기존 Galaxy 캡처를 재검토했다. RGB/5·10·15·20% 반복 수집은 생략한다. 대상 세션의
