@@ -1,5 +1,13 @@
 # 진행 상황
 
+## 실차 BLE 점검 결과: GATT 비활성 — 2026-11-08
+
+- 사용자가 NEMESIS로 점검 패키지 0.2.0을 설치·실행했다. 설치·DEX 실행은 성공, 결과는 `SCAN_REJECTED`.
+- 사용자 요청으로 무선 ADB에 접속해 읽기 전용으로 확인했다. `Bluetooth.apk`의 `profile_supported_gatt=false`,
+  `GattService`는 매니페스트에서 그 값으로 꺼져 있고 실행 중이 아니다. Android API로는 BLE 스캔·연결이 불가하다.
+- 차량 상태는 바꾸지 않았다. `Bluetooth.apk`/odex와 logcat 사본은 `private/`에만 저장했다.
+- 다음 판단: A안 GATT 활성화 시험(시스템 설정 변경, 승인 필요) 또는 B안(Galaxy 중계)·C안. [근거](research/K8_BLE_GATT_DISABLED.md).
+
 ## 점검 USB 준비 — 2026-11-08
 
 - 사용자 USB(D:, FAT32)의 기존 `NEMESIS.data`(K8 증거 수집기 실행)를 `NEMESIS-backup/before-bleprobe-20261108-164001/`에 백업했다.

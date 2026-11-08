@@ -9,7 +9,8 @@
    `INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES`로 설치 거부됐다.
    차량에 진단 패키지는 등록되지 않았고 직접 GATT 시험은 대기 중이다.
    원인: NEMESIS 공식 문서에 적힌 OEM 서명자 허용 목록(부팅 완료 상태의 일반 `pm` 거부)이다.
-   점검 도구는 APK 설치 없이 NEMESIS `kind=sh` + DEX(`app_process`) 방식으로 바꿨다. [설치 거부 원인](research/GEN5W_INSTALL_ALLOWLIST.md)
+   점검 도구는 APK 설치 없이 NEMESIS `kind=sh` + DEX(`app_process`) 방식으로 바꿨다.
+   2026-11-08 실차 결과 `SCAN_REJECTED`: 순정 `Bluetooth.apk`가 GATT 프로필을 꺼 두었다([근거](research/K8_BLE_GATT_DISABLED.md)). [설치 거부 원인](research/GEN5W_INSTALL_ALLOWLIST.md)
 7. GitHub 동기화를 재개했다. 다른 PC에서는 현재 구현 브랜치 `codex/device-evidence`를 사용한다.
 8. PC 파일 저장은 구현했지만 차량용 영구 저장·자동실행·종료 복구는 아직 통합하지 않았다.
 9. 진단의 system_server 설정/OFF 콜백 전달과 QuickBoot 수명은 미검증이다.
