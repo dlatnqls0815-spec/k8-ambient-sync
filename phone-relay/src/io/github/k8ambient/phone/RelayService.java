@@ -48,16 +48,18 @@ public final class RelayService extends Service {
             reloadThemes = true;
             return START_STICKY;
         }
+        // startForegroundService() requires startForeground() on every start, even one that exits at once.
+        startInForeground();
         if (engine != null) return START_STICKY;
         final Prefs prefs = new Prefs(this);
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         final BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
         if (adapter == null || prefs.car() == null || prefs.lamp() == null) {
             RelayStatus.car("차량/조명 선택 필요");
+            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
-        startInForeground();
         RelayStatus.reset();
         RelayStatus.running = true;
 

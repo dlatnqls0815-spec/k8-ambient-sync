@@ -12,6 +12,8 @@ import android.bluetooth.le.ScanResult;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Insets;
+import android.view.WindowInsets;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -51,6 +53,10 @@ public final class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 32, 32, 32);
+        TextView title = new TextView(this);
+        title.setText("K8 앰비언트 중계");
+        title.setTextSize(22);
+        layout.addView(title);
         text(layout, "LotusLamp X 앱은 종료하세요. 조명은 한 번에 한 기기에만 연결됩니다.\n"
                 + "차량에 NEMESIS 'K8 Ambient Relay'가 설치돼 있어야 합니다.");
         button(layout, "1. 블루투스 권한 허용", new View.OnClickListener() {
@@ -75,6 +81,7 @@ public final class MainActivity extends Activity {
         button(layout, "4. 중계 시작", new View.OnClickListener() {
             public void onClick(View v) {
                 if (!granted()) { toast("먼저 권한을 허용하세요"); return; }
+                if (prefs.car() == null || prefs.lamp() == null) { toast("차량과 조명을 먼저 선택하세요"); return; }
                 startForegroundService(new Intent(MainActivity.this, RelayService.class));
             }
         });
@@ -99,6 +106,15 @@ public final class MainActivity extends Activity {
         layout.addView(status);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(layout);
+        // Target SDK 35 draws edge-to-edge: drop the action bar and pad the content by the system bars.
+        if (getActionBar() != null) getActionBar().hide();
+        scroll.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return WindowInsets.CONSUMED;
+            }
+        });
         setContentView(scroll);
     }
 
