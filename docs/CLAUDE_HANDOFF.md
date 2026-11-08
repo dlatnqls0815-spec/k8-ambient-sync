@@ -120,6 +120,7 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 | `private/att-writes.tsv`, `private/att-evidence.json` | 최초 HCI 선별·분석 결과 |
 | `private/captures/galaxy-parked-power-20261107-204650.zip` | 추가 USB 보고서, 50,966,231바이트 |
 | `private/captures/galaxy-parked-power-20261107-204650/` | 추가 HCI 두 파일과 쓰기 0건 TSV |
+| `private/nemesis-bleprobe/` | 진단 APK를 감싼 NEMESIS 패키지 zip과 USB 설치 구성 |
 | `private/ble-diagnostic/` | 설치 실패한 원본·legacy APK와 로컬 개발 서명 키 |
 | `.tools/android19/`, `.tools/wireshark/` | 공식 API19 플랫폼 및 TShark 4.6.9 |
 

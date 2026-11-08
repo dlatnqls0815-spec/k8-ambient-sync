@@ -1,5 +1,11 @@
 # 진행 상황
 
+## 진단 APK NEMESIS 패키지 준비 — 2026-11-08
+
+- NEMESIS 소스로 차량의 1.16.4에도 허용 목록 우회 설치(`pm_install_apk`)가 있음을 확인했다(1.15부터).
+- `tools/build_nemesis_bleprobe.py`와 테스트 4개를 추가했다. 검증된 APK만 감싸고 root 훅·서비스는 없다.
+- `private/nemesis-bleprobe/`에 zip(SHA-256 `3fdb11d2…6bcb6d7`)과 USB 설치 구성을 만들었다. 차량 설치는 하지 않았다.
+
 ## 진단 APK 설치 거부 원인 확인 — 2026-11-07 밤
 
 - NEMESIS 공식 문서 04-Packages(`345f171`): 부팅 완료 상태에서 OEM 허용 목록 밖 서명자는
