@@ -1,5 +1,12 @@
 # 진행 상황
 
+## 참고 패키지 분석: Ambient Sound 1.1.0 — 2026-11-08
+
+- 사용자 제공 NEMESIS 패키지(Ioniq 5/Grandeur 대상)의 소스를 읽었다. 설치·실행하지 않았고 K8 대상도 아니다.
+- 같은 `ISystemService` Binder 코드(밝기 77, 색상 78)를 K8 DEX에서도 확인했다.
+- 밝기는 메뉴 단계+1, "brightness 1 = dimmest on" → raw1=OFF 근거 추가. 직접색은 `[0x00, 값]` → 하위 바이트가 RGB.
+- 순정 팔레트는 차종별로 다르다. [참고 패키지](research/AMBIENT_SOUND_PACKAGE.md).
+
 ## 진단 APK NEMESIS 패키지 준비 — 2026-11-08
 
 - NEMESIS 소스로 차량의 1.16.4에도 허용 목록 우회 설치(`pm_install_apk`)가 있음을 확인했다(1.15부터).
