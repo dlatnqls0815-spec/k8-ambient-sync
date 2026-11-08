@@ -1,5 +1,13 @@
 # 진행 상황
 
+## 점검 USB 준비 — 2026-11-08
+
+- 사용자 USB(D:, FAT32)의 기존 `NEMESIS.data`(K8 증거 수집기 실행)를 `NEMESIS-backup/before-bleprobe-20261108-164001/`에 백업했다.
+- `NEMESIS.data`를 `type=install`, `packages/k8ambient.bleprobe-0.2.0.zip`으로 바꾸고 zip·설명서 해시를 원본과 대조했다. `k8-ble-probe.example.txt`도 넣었다.
+- USB에만 있던 2026-11-07 16:24 수집 2건을 `private/vehicle-usb/`로 복사해 12개 파일씩 해시 대조했다.
+  둘 다 OEM SML 0줄(`partial_oem_reader_failure`)이라 새 SML 근거는 아니다.
+- 차량 설치·실행은 아직이다. 끝나면 백업한 `NEMESIS.data`로 되돌린다.
+
 ## BLE 점검을 DEX 실행 방식으로 전환 — 2026-11-08
 
 - 사용자 지적대로 NEMESIS 패키지는 대부분 `kind=sh`가 DEX를 `app_process`로 실행한다. 점검 도구를 이 방식으로 바꿨다.
