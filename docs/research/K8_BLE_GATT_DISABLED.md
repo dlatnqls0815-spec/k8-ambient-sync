@@ -67,3 +67,27 @@ Android 4.4에서 `BluetoothAdapter.startLeScan()`과 `BluetoothDevice.connectGa
 
 원복 후 로그에 순정 `HfDeviceBTCMSppApi`가 RFCOMM 서버 소켓으로 휴대폰과 SPP 연결을 맺는 기록이 있다.
 차량 → 휴대폰으로 상태를 넘기는 B안(Galaxy 중계)의 통로 후보로 클래식 RFCOMM이 유력하다.
+
+## 네이티브 스택 분석 — 2026-11-08 17:0x (읽기 전용, 정차 확인 후)
+
+로그로 속도 변화 없음·기어 상태 0을 확인한 뒤 차량 라이브러리를 읽기 전용으로 복사해 PC에서 문자열을 분석했다.
+
+| 파일 | 내용 |
+|---|---|
+| `/system/lib/libbluetooth_jni.so` | GATT JNI 전체 존재(`gattClientScanNative`, `btgattc_register_app_cb` 등). 스택에서 `gatt` 인터페이스를 못 받으면 `Failed to get Bluetooth GATT Interface` |
+| `/system/lib/hw/bplus.default.so` (1,652,380 B, SHA-256 `134eac56…8600e2cb`) | 실제 Broadcom 스택 HAL(`bluetooth__get_bluetooth_interface`, `get_profile_interface %s`) |
+
+`bplus.default.so`가 제공하는 프로필 인터페이스는 `btif_av`, `avk`, `fts`, `hd`, `hf`, `hfdevice`, `hh`, `hl`, `mce`, `op`, `pan`, `rc`, `rcc`,
+`sc`, `sock`뿐이다. **`btif_gatt_get_interface`, `btif_gattc_*`, `BTA_GATTC*`, 프로필 이름 `gatt`가 없다.**
+남은 `GATT_*` 문자열은 상태 코드 이름표뿐이다. BLE 관련 문자열은 보안·페어링(DM/SMP) 이벤트 이름뿐이다.
+
+결론: **이 펌웨어의 Bluetooth 스택에는 GATT 클라이언트가 빌드되지 않았다.** 시험에서 `registerClient()`가 응답을 못 받은 이유와 맞는다.
+설정·컴포넌트를 켜도 BLE 스캔·연결은 불가능하다. 스택 교체나 HCI 직접 제어는 Bluetooth 전체(통화·무선 AA)를 걸어야 하는
+시스템 수준 개조라 하지 않는다. **A안(차량 직접 BLE)은 종료한다.** 칩(`bcm4349.hcd`)이 BLE를 지원해도 소프트웨어 경로가 없다.
+
+사본: `private/oem-bt/bplus.default.so`, `libbluetooth_jni.so`, `libbt-client-api.so`(Git 제외).
+
+## 별도 발견: 차량 ADB TCP 속성이 켜져 있음
+
+`getprop`에서 `persist.service.adb.tcp.enable=1`을 확인했다. 오늘 무선 ADB 접속이 5555로 된 이유로 보인다.
+이전 기록상 이 값은 무선 Android Auto와 eth0 서브넷 충돌을 일으켰다. 이번 세션에서는 바꾸지 않았다. 사용자 판단이 필요하다.

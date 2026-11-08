@@ -1,5 +1,11 @@
 # 진행 상황
 
+## A안 종료: 차량 Bluetooth 스택에 GATT 없음 — 2026-11-08
+
+- 정차 확인 후 `bplus.default.so`(Broadcom 스택 HAL)를 읽기 전용으로 분석했다. GATT 클라이언트 인터페이스가 빌드에 없다.
+- 설정·컴포넌트로는 해결되지 않는다. 차량 직접 BLE(A안)를 종료하고 B안(Galaxy 중계)·C안(별도 장치)으로 넘어간다.
+- 별도 발견: 차량 `persist.service.adb.tcp.enable=1`(무선 AA 충돌 이력). 바꾸지 않았고 사용자 판단 대기.
+
 ## GattService 활성화 시험 — 2026-11-08 (사용자 승인, 원복 완료)
 
 - root로 GattService를 켜고 시작 신호까지 보냈다. 요청이 GattService에 도달했지만 네이티브 스택이 등록에 응답하지 않아 여전히 `SCAN_REJECTED`.
