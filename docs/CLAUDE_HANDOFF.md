@@ -87,7 +87,8 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 3. 방문 후: raw1 소등이 확인되면 `toK8ProvisionalBrightnessPercent()`를 제거하고 OFF 사다리로 일원화한다.
    전원 프레임이 HCI와 맞으면 `forLotusWithStaticPower`를 기본 Lotus 경로로 올린다.
    설치 거부는 OEM 서명자 허용 목록으로 확인됐다([근거](research/GEN5W_INSTALL_ALLOWLIST.md)).
-   진단 APK를 NEMESIS 패키지(`kind=apk`)로 만들어 승인 후 설치하고 BLE 탐색 결과로 A안을 판단한다.
+   점검은 APK 대신 NEMESIS `kind=sh` 패키지가 DEX를 `app_process`로 실행한다(`ble-probe-dex/`).
+   승인 후 설치·실행하고 결과로 A안을 판단한다.
 
 ## 코드와 근거의 위치
 
@@ -98,7 +99,8 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 | `tools/watch_k8_sml_adb.py` | 최대 5분 SML 선별 실시간 기록 |
 | `tools/k8_ble_preflight.py` | 읽기 전용 BLE 선언·서비스 요약 |
 | `tools/att_evidence.py` | 선별 ATT TSV 분석 |
-| `ble-diagnostic/` | 설치 실패한 독립 BLE 연결·서비스 탐색 APK 소스 |
+| `ble-diagnostic/` | 설치 실패한 독립 BLE 연결·서비스 탐색 APK 소스(보관용) |
+| `ble-probe-dex/` | 현재 점검 도구. NEMESIS가 `app_process`로 실행하는 화면 없는 DEX와 셸 앱 |
 | `tools/build_k8_ble_diagnostic.ps1` | API19 APK의 로컬 빌드·서명·검증 |
 | `docs/research/K8_SML_LIVE_CAPTURE.md` | 최초 K8 실측 근거 |
 | `docs/research/LOTUS_HCI_CAPTURE.md` | 최초 Galaxy 실측 근거 |
@@ -120,7 +122,8 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 | `private/att-writes.tsv`, `private/att-evidence.json` | 최초 HCI 선별·분석 결과 |
 | `private/captures/galaxy-parked-power-20261107-204650.zip` | 추가 USB 보고서, 50,966,231바이트 |
 | `private/captures/galaxy-parked-power-20261107-204650/` | 추가 HCI 두 파일과 쓰기 0건 TSV |
-| `private/nemesis-bleprobe/` | 진단 APK를 감싼 NEMESIS 패키지 zip과 USB 설치 구성 |
+| `private/ble-probe-dex/` | 화면 없는 BLE 점검 DEX(`tools/build_k8_ble_probe_dex.py` 출력) |
+| `private/nemesis-bleprobe/` | 점검 DEX를 실행하는 NEMESIS 패키지 zip(0.2.0, kind=sh)과 USB 설치 구성 |
 | `private/ble-diagnostic/` | 설치 실패한 원본·legacy APK와 로컬 개발 서명 키 |
 | `.tools/android19/`, `.tools/wireshark/` | 공식 API19 플랫폼 및 TShark 4.6.9 |
 

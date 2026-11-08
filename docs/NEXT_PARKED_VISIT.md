@@ -33,7 +33,7 @@ SmartThings 같은 BLE 앱 조작과 휴대폰 재부팅·Bluetooth 끄기는 4�
 |---|---|---|---|
 | 1 | 무선 ADB 연결 후 `tools/watch_k8_sml_adb.py` 감시 시작 | SML 로그 | 2의 raw 값 |
 | 2 | 순정 앰비언트 **꺼짐 → 1단계 → 꺼짐** | 각 조작 시 실제 소등/점등 여부와 시각 | raw1=OFF 확정, 임시 함수 제거 |
-| 3 | (사용자 승인 후) USB로 **NEMESIS 패키지** `k8ambient.bleprobe` 설치 → 실행 → 조명 주소 입력 → 연결 점검 → Uninstall. 절차는 [설치 문서](research/GEN5W_INSTALL_ALLOWLIST.md#현장-설치-절차-사용자-승인-후) | 결과 문구 사진 | 차량 직접 BLE 가능 여부 |
+| 3 | (사용자 승인 후) USB로 **NEMESIS 패키지** `k8ambient.bleprobe` 0.2.0(DEX 실행 방식) 설치 → Launch → 결과 확인 → Uninstall. 절차는 [설치 문서](research/GEN5W_INSTALL_ALLOWLIST.md#현장-설치실행-절차-사용자-승인-후) | 결과 알림 사진, USB `k8-ble-probe-result.txt` | 차량 직접 BLE 가능 여부 |
 | 4 | Lotus 앱에서 **전원 끄기 → 켜기**, 바로 그 자리에서 Galaxy 버그 보고서 생성 | 보고서 ZIP, 조명 반응·시각 | 정적 전원 프레임과 HCI 대조 |
 | 5 | 원래 설정(드림퍼플·평소 밝기)으로 복원 | — | — |
 

@@ -4,6 +4,10 @@
 문서/메타데이터 검사를 실행한다.
 JDK 8과 Python 3.9+ 외 의존성은 없다. 자세한 검사 결과는 PROGRESS에 기록한다.
 
+2026-11-08부터 `check.py`는 BLE 점검 DEX의 순수 로직(`tests/bleprobe/ProbeLogicTestMain.java`)도 실행하고,
+`.tools/android19/android-4.4.2/android.jar`(또는 `--android-jar`)가 있으면 `ble-probe-dex/src`를 API 19로 컴파일한다.
+DEX 변환은 `tools/build_k8_ble_probe_dex.py`가 따로 한다(D8 필요).
+
 2026-11-07 검증: 코어 **139**, host **14**, 진단 fake **26** = **179개 검사 통과**.
 코어는 golden 패킷·필드 손상·테마/unknown 밝기 거부·OFF·중복·최신값·부분 실패·재연결·
 재시도 상한·재진입 이벤트·연속 색상/밝기 변경을 검사한다.

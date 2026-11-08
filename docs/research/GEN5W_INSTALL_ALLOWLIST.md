@@ -48,42 +48,61 @@ NEMESIS 소스 `Sources/native/pkg.c`의 `pm_install_apk()`를 확인했다. 1.1
 "HMG PackageManagerService.installNewPackageLI가 부팅 완료 상태에서 허용 목록 OEM 서명자만 허용, 그 외는 -104"로 적는다.
 동작: 설치 순간 `sys.boot_completed`를 `0`으로 바꿈 → `pm install -r` → 원래 값으로 되돌림.
 
-## 준비한 패키지
+## 준비한 패키지 — DEX 실행 방식(0.2.0)
 
-`python tools/build_nemesis_bleprobe.py`가 검증된 진단 APK(SHA-256 `edbc7b9b…f4831d`)를 감싼다.
-결과물은 Git 제외 경로 `private/nemesis-bleprobe/`에 생긴다.
+다른 NEMESIS 패키지(Ambient Sound 작업자, HMG-API 모드)처럼 **APK를 설치하지 않고** 셸 앱(`kind=sh`)이
+DEX를 `app_process`로 실행한다. 패키지 관리자를 거치지 않아 허용 목록과 무관하고, 끝나면 남는 앱이 없다.
+처음 만든 0.1.0(`kind=apk`)은 이 방식으로 대체했다.
 
-| 파일 | 내용 |
+| 경로 | 역할 |
 |---|---|
-| `k8ambient.bleprobe-0.1.0.zip` | `NEMESIS.data` + `app/k8-ble-probe.apk`. 같은 APK면 바이트까지 같은 zip |
-| `usb/NEMESIS.data`, `usb/packages/…zip` | USB 루트에 그대로 복사하는 설치용 구성(`type=install`) |
-| `SHA256SUMS.txt` | zip과 APK 해시 |
+| `ble-probe-dex/src/…/HeadlessProbe.java` | 화면 없는 점검 본체(API 19). 스캔 → (주소가 있으면) 연결 → 서비스·특성 목록 → 연결 해제 |
+| `ble-probe-dex/src/…/ProbeLogic.java` | 인자·주소 검사, 광고의 FFF0 판별, 주소 가림, 결과 분류. PC JVM에서 테스트 |
+| `ble-probe-dex/nemesis/bin/probe.sh` | NEMESIS가 root로 실행. USB의 주소 파일을 읽고 DEX를 실행, 결과를 USB에 복사 |
+| `tools/build_k8_ble_probe_dex.py` | 공식 API 19 `android.jar`로 컴파일 → D8 `--min-api 19` → DEX 035 |
+| `tools/build_nemesis_bleprobe.py` | `NEMESIS.data` + 스크립트 + DEX를 zip으로 묶고 USB 설치 구성을 만든다 |
 
-패키지 내용:
+빌드(로컬 도구 경로는 PC마다 다르다):
 
-- id `k8ambient.bleprobe`, 버전 0.1.0, `[app.0] kind=apk`, Android 패키지 `io.github.k8ambient.bleprobe`.
-- **root 훅 스크립트·서비스 없음.** 시스템 파일을 바꾸지 않는다. NEMESIS가 하는 일은 APK 설치와 제거뿐이다.
-- 제거: Manager → My Packages → K8 BLE Probe → Uninstall. NEMESIS가 `pm uninstall`로 앱까지 지운다.
-- 테스트(`tests/python/test_nemesis_bleprobe.py`)는 NEMESIS `zip.c` 규칙(zip64·암호화 금지, `..`·절대 경로 금지)과
-  설명 길이 제한, USB 구성, 같은 입력의 같은 출력을 확인한다. 실제 차량 설치는 아직 하지 않았다.
+```bash
+python tools/build_k8_ble_probe_dex.py --jdk <JDK> --d8 <build-tools>/lib/d8.jar
+python tools/build_nemesis_bleprobe.py
+```
 
-## 현장 설치 절차 (사용자 승인 후)
+결과는 Git 제외 경로 `private/nemesis-bleprobe/`에 생긴다. 2026-11-08 빌드:
+zip `k8ambient.bleprobe-0.2.0.zip` SHA-256 `9d0aa3c3…939b1ad`, DEX `c2a70baa…a1a4bff3`.
+
+안전 범위:
+
+- Bluetooth를 켜지 않는다(꺼져 있으면 `BLUETOOTH_DISABLED`로 끝). 페어링·특성/디스크립터 쓰기·차량 서비스 호출이 없다.
+- 설치 훅·상주 서비스가 없다. 시스템 파일과 속성을 바꾸지 않는다. 테스트가 스크립트에 `setprop`, `pm`, `mount` 등이 없음을 확인한다.
+- 대상 주소가 아닌 이름 없는 기기는 주소 앞 4바이트를 가린다. 결과 파일은 사용자 USB와 차량 `/data/local/tmp/k8-ble-probe/`에만 남는다.
+- `check.py`가 순수 로직 24개 검사를 돌리고, 본체를 실제 API 19 `android.jar`로 컴파일해 4.4에 없는 API를 쓰지 않음을 확인한다.
+
+추정으로 남은 것: API 19의 `BluetoothDevice.connectGatt`가 Context 없이(`null`) 동작한다는 점, root로 실행한
+`app_process`에서 BLE 권한 검사를 통과한다는 점. 둘 다 Android 4.4 공개 구조상 가능하지만 차량에서 처음 확인한다.
+
+## 현장 설치·실행 절차 (사용자 승인 후)
 
 1. 기존 USB의 `NEMESIS.data`(HMG-API 패키지 목록)를 백업한다. 따로 USB를 쓰면 더 안전하다.
-2. `private/nemesis-bleprobe/usb/` 안의 `NEMESIS.data`와 `packages/` 폴더를 USB 루트에 복사한다.
-3. 정차·P 상태에서 USB를 꽂는다 → NEMESIS 설치 확인을 누른다.
-4. Manager에서 K8 BLE Probe를 실행하고 조명 주소를 입력 → **연결 점검**. 상태 문구를 사진으로 남긴다.
-   점검 앱은 스캔·연결·서비스 목록 확인만 하며 조명에 명령을 보내지 않는다.
-5. 끝나면 Manager에서 Uninstall. USB의 원래 `NEMESIS.data`를 복원한다.
+2. `private/nemesis-bleprobe/usb/`의 `NEMESIS.data`와 `packages/`를 USB 루트에 복사한다.
+3. **(선택)** 조명 주소를 알면 USB 루트에 `k8-ble-probe.txt`를 만들고 첫 줄에 주소를 적는다
+   (`k8-ble-probe.example.txt` 형식). 없으면 주변 BLE 기기 목록만 만든다.
+4. 휴대폰 Lotus 앱을 종료하거나 휴대폰 Bluetooth를 잠시 끈다. 조명이 휴대폰에 연결돼 있으면 광고를 멈출 수 있다.
+5. 정차·P 상태에서 USB를 꽂고 설치를 확인한다.
+6. Manager → My Packages → K8 BLE Probe → Launch. 최대 약 1분 뒤 마지막 결과가 알림으로 뜬다. 화면을 사진으로 남긴다.
+   주소 파일 없이 실행했다면, USB의 `k8-ble-probe-result.txt`에서 조명 주소를 확인해 3번을 하고 다시 Launch한다.
+7. 끝나면 Uninstall하고 USB의 원래 `NEMESIS.data`를 복원한다. USB의 결과 파일은 PC `private/`로 옮긴다.
 
-USB 자동 실행이 안 되면 기존 무선 ADB로 zip을 `/data/local/tmp`에 올리고 `nemesis install <zip>`을 쓸 수 있다.
-ADB shell 권한에서 이 명령이 동작하는지는 아직 확인하지 않았다.
+USB 자동 설치가 안 되면 기존 무선 ADB로 zip을 올리고 `nemesis install <zip>`을 쓸 수 있다(ADB shell 권한에서 동작 여부 미확인).
 
-| 결과 문구 | 의미 |
+| 마지막 결과 | 의미 |
 |---|---|
-| `CONNECTED_FFF0_FFF3_WRITE_NO_RESPONSE` / `CONNECTED_FFF0_FFF3` | 차량이 조명에 직접 연결하고 쓰기 특성까지 찾음 → A안(직접 BLE) 진행 근거 |
-| `CONNECTED_FFF0_NOT_FOUND` / `CONNECTED_FFF3_NOT_FOUND` | 연결은 됨. 서비스 구성이 다르거나 다른 기기 주소 |
-| `SCAN_TIMEOUT` | 12초 안에 그 조명 광고를 못 봄. 휴대폰 Lotus 앱이 연결 중이면 끄고 다시 시도 |
-| `CONNECT_TIMEOUT` / `CONNECT_REJECTED` / `CONNECT_ERROR` | 발견은 했으나 연결 실패. 1~2회 재시도 후에도 같으면 기록 |
-| `SCAN_REJECTED` / `SCAN_ERROR` / `NO_ADAPTER` / `BLUETOOTH_DISABLED` | 차량 BLE 스캔 불가 또는 꺼짐 → A안 어려움, B안(Galaxy 중계) 검토 |
-| `DISCOVERY_*` | 연결 후 서비스 탐색 실패. 재시도 후 기록 |
+| `CONNECTED_FFF0_FFF3_WRITE_NO_RESPONSE` / `…_WRITE` | 차량이 조명에 직접 연결하고 쓰기 특성까지 찾음 → **A안(직접 BLE) 진행 근거** |
+| `CONNECTED_FFF0_NOT_FOUND` / `CONNECTED_FFF3_NOT_FOUND` / `…_NOT_WRITABLE` | 연결은 됨. 다른 기기 주소이거나 서비스 구성이 다름. 결과 파일의 SERVICE/CHAR 목록으로 분석 |
+| `SCAN_DONE devices=N` | 주소 없이 목록만 만듦. 결과 파일의 `fff0_adv=true` 또는 이름으로 조명 주소를 찾는다 |
+| `SCAN_TIMEOUT` | 그 주소의 광고를 못 봄. 휴대폰 연결을 끊고 다시 시도 |
+| `CONNECT_TIMEOUT` / `CONNECT_FAILED status=…` / `CONNECT_ERROR` | 발견은 했으나 연결 실패. 1~2회 재시도 후 기록 |
+| `GATT_UNAVAILABLE` | 차량 Bluetooth 스택이 GATT 클라이언트를 내주지 않음 → A안 어려움, B안 검토 |
+| `SCAN_REJECTED` / `SCAN_ERROR` / `NO_ADAPTER` / `BLUETOOTH_DISABLED` | 차량 BLE 스캔 불가 또는 꺼짐 → A안 어려움 |
+| `DISCOVERY_*`, `PROBE_ERROR`, `DEX_MISSING` | 결과 파일의 ERROR 줄과 함께 PC에서 분석 |

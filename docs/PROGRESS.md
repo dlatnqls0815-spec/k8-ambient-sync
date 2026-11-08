@@ -1,5 +1,13 @@
 # 진행 상황
 
+## BLE 점검을 DEX 실행 방식으로 전환 — 2026-11-08
+
+- 사용자 지적대로 NEMESIS 패키지는 대부분 `kind=sh`가 DEX를 `app_process`로 실행한다. 점검 도구를 이 방식으로 바꿨다.
+- `ble-probe-dex/`: 화면 없는 `HeadlessProbe`(스캔·연결·서비스 목록, 쓰기 없음)와 PC 테스트용 `ProbeLogic`, root 셸 앱 `probe.sh`.
+- `tools/build_k8_ble_probe_dex.py`(API19 컴파일 → D8 DEX 035), `build_nemesis_bleprobe.py`를 kind=sh 0.2.0으로 변경.
+- `check.py`에 ProbeLogic 24개 검사와 API19 `android.jar` 컴파일을 추가했다. Python 86개 중 85 통과·1 skip, Java 190·14·37·24.
+- 패키지 zip SHA-256 `9d0aa3c3…939b1ad`. 차량 설치·실행은 하지 않았다. Context 없는 `connectGatt`와 root BLE 권한은 현장 확인 대상.
+
 ## 참고 패키지 분석: Ambient Sound 1.1.0 — 2026-11-08
 
 - 사용자 제공 NEMESIS 패키지(Ioniq 5/Grandeur 대상)의 소스를 읽었다. 설치·실행하지 않았고 K8 대상도 아니다.

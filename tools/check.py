@@ -109,6 +109,18 @@ def main():
                   for p in (ROOT / folder).rglob("*.java")]
     compile_java(javac, test_files, diagnostic_tests)
     run([java, "-ea", "-cp", diagnostic_tests, "DiagnosticTestMain"])
+    probe_tests = output / "ble-probe-tests"
+    compile_java(javac, [ROOT / "ble-probe-dex/src/io/github/k8ambient/bleprobe/ProbeLogic.java",
+                         ROOT / "tests/bleprobe/ProbeLogicTestMain.java"], probe_tests)
+    run([java, "-ea", "-cp", probe_tests, "ProbeLogicTestMain"])
+    probe_jar = args.android_jar or ROOT / ".tools/android19/android-4.4.2/android.jar"
+    if probe_jar.is_file():
+        # The headless probe must use only API 19 classes (app_process on the head unit).
+        compile_java(javac, (ROOT / "ble-probe-dex/src").rglob("*.java"), output / "ble-probe-api19",
+                     android_jar=probe_jar.resolve())
+        print("Headless BLE probe: compiled against API 19 android.jar", flush=True)
+    else:
+        print("Headless BLE probe: API 19 android.jar not found; compile skipped", flush=True)
     if args.diagnostic:
         diagnostic_compile(javac, args.hmg_source, args.android_jar, output / "diagnostic-contract")
     else:
