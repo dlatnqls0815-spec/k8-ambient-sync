@@ -2,6 +2,7 @@ package io.github.k8ambient.phone;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import io.github.k8ambient.core.ColorTone;
 import io.github.k8ambient.core.K8LotusMapping;
 import java.util.Map;
 import java.util.TreeMap;
@@ -18,6 +19,28 @@ final class Prefs {
     String car() { return prefs.getString(CAR, null); }
     String lamp() { return prefs.getString(LAMP, null); }
     boolean power() { return prefs.getBoolean(POWER, false); }
+
+    /** Tone/fade settings. Defaults: deeper colors (gamma 1.8), slightly less blue, 20 % max, 0.8 s fade. */
+    static final String FADE_MS = "fadeMs", GAMMA = "gamma10", RED = "redGain", GREEN = "greenGain", BLUE = "blueGain", MAX = "maxBrightness";
+
+    int get(String key) {
+        if (FADE_MS.equals(key)) return prefs.getInt(key, 800);
+        if (GAMMA.equals(key)) return prefs.getInt(key, 18);
+        if (BLUE.equals(key)) return prefs.getInt(key, 85);
+        if (MAX.equals(key)) return prefs.getInt(key, 20);
+        return prefs.getInt(key, 100);
+    }
+
+    void set(String key, int value) { prefs.edit().putInt(key, value).apply(); }
+
+    ColorTone tone() {
+        return new ColorTone(clamp(get(GAMMA), 10, 30), clamp(get(RED), 0, 100), clamp(get(GREEN), 0, 100),
+                clamp(get(BLUE), 0, 100), clamp(get(MAX), 1, 100));
+    }
+
+    long fadeMs() { return clamp(get(FADE_MS), 0, 5000); }
+
+    private static int clamp(int value, int low, int high) { return Math.max(low, Math.min(high, value)); }
 
     void setCar(String address) { prefs.edit().putString(CAR, address).apply(); }
     void setLamp(String address) { prefs.edit().putString(LAMP, address).apply(); }

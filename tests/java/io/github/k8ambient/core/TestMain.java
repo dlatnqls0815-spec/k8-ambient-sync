@@ -235,6 +235,49 @@ public final class TestMain {
         rejects(new Action() { public void run() { new K8LotusMapping().setThemeColor("016b015a0195", 256, 2, 3); } });
     }
 
+    private static void colorTone() {
+        AmbientState pink = new AmbientState(255, 0, 128, 100, true);
+        check(ColorTone.NEUTRAL.apply(pink).equals(pink), "neutral tone is identity");
+        ColorTone deep = new ColorTone(20, 100, 100, 80, 20);
+        AmbientState toned = deep.apply(pink);
+        check(toned.red == 255 && toned.green == 0, "gamma keeps endpoints");
+        check(toned.blue == (int) Math.round(255 * Math.pow(128 / 255.0, 2.0) * 0.8), "gamma deepens mid blue, gain trims");
+        check(toned.brightness == 20 && toned.on, "max brightness scales 100 to 20");
+        check(deep.apply(new AmbientState(10, 10, 10, 10, true)).brightness == 2, "level 1 maps to 2 percent");
+        check(!deep.apply(new AmbientState(1, 2, 3, 0, false)).on, "power passes through");
+        rejects(new Action() { public void run() { new ColorTone(9, 100, 100, 100, 20); } });
+        rejects(new Action() { public void run() { new ColorTone(31, 100, 100, 100, 20); } });
+        rejects(new Action() { public void run() { new ColorTone(10, 101, 100, 100, 20); } });
+        rejects(new Action() { public void run() { new ColorTone(10, 100, 100, 100, 0); } });
+    }
+
+    private static void fader() {
+        Fader fader = new Fader();
+        check(fader.current(0) == null && !fader.active(0), "empty fader");
+        AmbientState red = new AmbientState(200, 0, 0, 20, true);
+        AmbientState blue = new AmbientState(0, 0, 200, 10, true);
+        fader.target(red, 0, 1000);
+        check(red.equals(fader.current(0)), "first target jumps");
+        fader.target(blue, 1000, 1000);
+        AmbientState half = fader.current(1500);
+        check(half.red == 100 && half.blue == 100 && half.brightness == 15 && half.on, "linear midpoint");
+        check(fader.active(1500) && !fader.active(2000), "active only during fade");
+        check(blue.equals(fader.current(2500)), "ends at target");
+        fader.target(red, 3000, 1000);
+        fader.target(new AmbientState(0, 200, 0, 20, true), 3500, 1000);
+        AmbientState retarget = fader.current(3500);
+        check(retarget.red == 100 && retarget.blue == 100, "retarget starts from shown color");
+        AmbientState off = new AmbientState(0, 200, 0, 0, false);
+        fader.target(off, 3600, 1000);
+        check(off.equals(fader.current(3600)), "turning off is immediate");
+        fader.target(red, 3700, 1000);
+        check(red.equals(fader.current(3700)), "turning on is immediate");
+        fader.target(blue, 4000, 0);
+        check(blue.equals(fader.current(4000)), "zero duration jumps");
+        rejects(new Action() { public void run() { new Fader().target(null, 0, 0); } });
+        rejects(new Action() { public void run() { new Fader().target(new AmbientState(0, 0, 0, 0, true), 0, -1); } });
+    }
+
     private static void observedLotusReplay() {
         MockTransport mock = new MockTransport();
         mock.acceptObservedLotus = true;
@@ -517,6 +560,8 @@ public final class TestMain {
         k8CapturedStatusesUnderOffLadderCandidate();
         relayProtocol();
         k8LotusMapping();
+        colorTone();
+        fader();
         observedLotusReplay();
         lotusStaticPower();
         userBrightnessCalibration();

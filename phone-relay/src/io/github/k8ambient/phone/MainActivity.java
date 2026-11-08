@@ -26,6 +26,7 @@ import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
@@ -100,6 +101,14 @@ public final class MainActivity extends Activity {
         button(layout, "지금 순정 테마의 지정 색 지우기", new View.OnClickListener() {
             public void onClick(View v) { assignTheme(null, false); }
         });
+
+        text(layout, "\n부드러운 전환·색 톤 (움직이면 조명에 바로 반영)");
+        slider(layout, "전환 시간", Prefs.FADE_MS, 0, 3000, 100, "ms");
+        slider(layout, "색 깊이(감마 ×0.1, 높을수록 진하고 덜 하얗게)", Prefs.GAMMA, 10, 30, 1, "");
+        slider(layout, "빨강 비율", Prefs.RED, 0, 100, 1, "%");
+        slider(layout, "초록 비율", Prefs.GREEN, 0, 100, 1, "%");
+        slider(layout, "파랑 비율", Prefs.BLUE, 0, 100, 1, "%");
+        slider(layout, "사제 최대 밝기(순정 최대일 때)", Prefs.MAX, 5, 50, 1, "%");
 
         status = new TextView(this);
         status.setTextIsSelectable(true);
@@ -233,6 +242,38 @@ public final class MainActivity extends Activity {
     static String mask(String address) {
         if (address == null) return "미선택";
         return address.length() == 17 ? "…" + address.substring(12) : address;
+    }
+
+    private final Runnable pushTone = new Runnable() {
+        public void run() {
+            if (RelayStatus.running) {
+                startService(new Intent(MainActivity.this, RelayService.class).setAction(RelayService.ACTION_RELOAD_THEMES));
+            }
+        }
+    };
+
+    private void slider(LinearLayout layout, final String label, final String key, final int min, int max, final int step,
+                        final String unit) {
+        final TextView caption = new TextView(this);
+        layout.addView(caption);
+        SeekBar bar = new SeekBar(this);
+        bar.setMax((max - min) / step);
+        int value = prefs.get(key);
+        bar.setProgress(Math.max(0, Math.min(bar.getMax(), (value - min) / step)));
+        caption.setText(label + ": " + value + unit);
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int chosen = min + progress * step;
+                caption.setText(label + ": " + chosen + unit);
+                if (!fromUser) return;
+                prefs.set(key, chosen);
+                ui.removeCallbacks(pushTone);
+                ui.postDelayed(pushTone, 150);
+            }
+            public void onStartTrackingTouch(SeekBar seekBar) { }
+            public void onStopTrackingTouch(SeekBar seekBar) { }
+        });
+        layout.addView(bar);
     }
 
     private void text(LinearLayout layout, String value) {

@@ -15,6 +15,8 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.SystemClock;
 import io.github.k8ambient.core.AmbientState;
+import io.github.k8ambient.core.ColorTone;
+import io.github.k8ambient.core.Fader;
 import io.github.k8ambient.core.K8LotusMapping;
 import io.github.k8ambient.core.RelayProtocol;
 import io.github.k8ambient.core.SmlStatus;
@@ -40,12 +42,19 @@ public final class RelayService extends Service {
     private volatile boolean stopping, reloadThemes;
     private volatile BluetoothSocket socket;
     private volatile long lastLineAt;
+    // Owned by the sync thread.
+    private final Fader fader = new Fader();
+    private ColorTone tone = ColorTone.NEUTRAL;
+    private long fadeMs;
+    private AmbientState lastMapped;
 
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_RELOAD_THEMES.equals(intent.getAction())) {
             reloadThemes = true;
+            final Handler current = sync;
+            if (current != null) current.post(reloadTone);
             return START_STICKY;
         }
         // startForegroundService() requires startForeground() on every start, even one that exits at once.
@@ -64,11 +73,13 @@ public final class RelayService extends Service {
         RelayStatus.running = true;
 
         LotusGattTransport transport = new LotusGattTransport(this, adapter, prefs.lamp());
-        engine = prefs.power() ? SyncEngine.forLotusWithStaticPower(transport) : SyncEngine.forObservedLotus(transport);
+        // ColorTone already scales brightness to the lamp maximum, so the engine passes it through.
+        engine = prefs.power() ? SyncEngine.forLotusWithStaticPower(transport, 100) : SyncEngine.forObservedLotus(transport, 100);
         syncThread = new HandlerThread("lotus-sync");
         syncThread.start();
         sync = new Handler(syncThread.getLooper());
         sync.post(new Runnable() { public void run() { engine.setEnabled(true); } });
+        sync.post(reloadTone);
         sync.post(tick);
 
         carThread = new Thread(new Runnable() {
@@ -82,6 +93,8 @@ public final class RelayService extends Service {
         public void run() {
             if (stopping) return;
             long now = SystemClock.elapsedRealtime();
+            AmbientState shown = fader.current(now);
+            if (shown != null) engine.onState(shown);
             try { engine.tick(now); } catch (RuntimeException error) { RelayStatus.lamp("오류 " + error.getClass().getSimpleName()); }
             BluetoothSocket open = socket;
             if (open != null && now - lastLineAt > LINK_TIMEOUT_MS) {
@@ -89,6 +102,16 @@ public final class RelayService extends Service {
                 try { open.close(); } catch (IOException ignored) { }
             }
             sync.postDelayed(this, TICK_MS);
+        }
+    };
+
+    /** Re-reads tone and fade settings and re-applies the last state at once (live preview). */
+    private final Runnable reloadTone = new Runnable() {
+        public void run() {
+            Prefs prefs = new Prefs(RelayService.this);
+            tone = prefs.tone();
+            fadeMs = prefs.fadeMs();
+            if (lastMapped != null) fader.target(tone.apply(lastMapped), SystemClock.elapsedRealtime(), 0);
         }
     };
 
@@ -150,7 +173,12 @@ public final class RelayService extends Service {
         }
         RelayStatus.target = RelayStatus.stamp((state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
                 + " RGB " + state.red + "," + state.green + "," + state.blue);
-        sync.post(new Runnable() { public void run() { engine.onState(state); } });
+        sync.post(new Runnable() {
+            public void run() {
+                lastMapped = state;
+                fader.target(tone.apply(state), SystemClock.elapsedRealtime(), fadeMs);
+            }
+        });
     }
 
     private void startInForeground() {

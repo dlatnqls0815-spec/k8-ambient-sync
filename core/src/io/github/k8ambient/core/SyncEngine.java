@@ -47,6 +47,16 @@ public final class SyncEngine {
         return new SyncEngine(transport, 20, true, true);
     }
 
+    /** As {@link #forObservedLotus}, with the input already scaled (e.g. by {@link ColorTone}); 100 = pass-through. */
+    public static SyncEngine forObservedLotus(Transport transport, int maximumBrightness) {
+        return new SyncEngine(transport, maximumBrightness, true, false);
+    }
+
+    /** As {@link #forLotusWithStaticPower}, with a chosen maximum; 100 = pass-through. */
+    public static SyncEngine forLotusWithStaticPower(Transport transport, int maximumBrightness) {
+        return new SyncEngine(transport, maximumBrightness, true, true);
+    }
+
     private SyncEngine(Transport transport, int maximumBrightness, boolean observedLotus, boolean lotusPower) {
         if (transport == null) throw new IllegalArgumentException("Transport is required");
         AmbientState.checkRange(maximumBrightness, 100);
