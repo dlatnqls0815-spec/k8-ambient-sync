@@ -100,6 +100,7 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 | `tools/k8_ble_preflight.py` | 읽기 전용 BLE 선언·서비스 요약 |
 | `tools/att_evidence.py` | 선별 ATT TSV 분석 |
 | `ble-diagnostic/` | 설치 실패한 독립 BLE 연결·서비스 탐색 APK 소스(보관용) |
+| `car-relay/`, `phone-relay/` | B안: 차량 RFCOMM 중계 DEX·NEMESIS 서비스, 휴대폰 중계 앱 ([B안](research/PLAN_B_RELAY.md)) |
 | `ble-probe-dex/` | 현재 점검 도구. NEMESIS가 `app_process`로 실행하는 화면 없는 DEX와 셸 앱 |
 | `tools/build_k8_ble_diagnostic.ps1` | API19 APK의 로컬 빌드·서명·검증 |
 | `docs/research/K8_SML_LIVE_CAPTURE.md` | 최초 K8 실측 근거 |
@@ -122,7 +123,7 @@ PC 분석은 끝났다([PC 재분석 5장](research/PC_ANALYSIS_2026-11-07.md)).
 | `private/att-writes.tsv`, `private/att-evidence.json` | 최초 HCI 선별·분석 결과 |
 | `private/captures/galaxy-parked-power-20261107-204650.zip` | 추가 USB 보고서, 50,966,231바이트 |
 | `private/captures/galaxy-parked-power-20261107-204650/` | 추가 HCI 두 파일과 쓰기 0건 TSV |
-| `private/ble-probe-dex/` | 화면 없는 BLE 점검 DEX(`tools/build_k8_ble_probe_dex.py` 출력) |
+| `private/ble-probe-dex/` | 화면 없는 BLE 점검 DEX(`tools/build_api19_dex.py` 출력) |
 | `private/nemesis-bleprobe/` | 점검 DEX를 실행하는 NEMESIS 패키지 zip(0.2.0, kind=sh)과 USB 설치 구성 |
 | `private/ble-diagnostic/` | 설치 실패한 원본·legacy APK와 로컬 개발 서명 키 |
 | `.tools/android19/`, `.tools/wireshark/` | 공식 API19 플랫폼 및 TShark 4.6.9 |

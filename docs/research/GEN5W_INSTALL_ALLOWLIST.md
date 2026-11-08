@@ -59,13 +59,13 @@ DEX를 `app_process`로 실행한다. 패키지 관리자를 거치지 않아 �
 | `ble-probe-dex/src/…/HeadlessProbe.java` | 화면 없는 점검 본체(API 19). 스캔 → (주소가 있으면) 연결 → 서비스·특성 목록 → 연결 해제 |
 | `ble-probe-dex/src/…/ProbeLogic.java` | 인자·주소 검사, 광고의 FFF0 판별, 주소 가림, 결과 분류. PC JVM에서 테스트 |
 | `ble-probe-dex/nemesis/bin/probe.sh` | NEMESIS가 root로 실행. USB의 주소 파일을 읽고 DEX를 실행, 결과를 USB에 복사 |
-| `tools/build_k8_ble_probe_dex.py` | 공식 API 19 `android.jar`로 컴파일 → D8 `--min-api 19` → DEX 035 |
+| `tools/build_api19_dex.py` | 공식 API 19 `android.jar`로 컴파일 → D8 `--min-api 19` → DEX 035 |
 | `tools/build_nemesis_bleprobe.py` | `NEMESIS.data` + 스크립트 + DEX를 zip으로 묶고 USB 설치 구성을 만든다 |
 
 빌드(로컬 도구 경로는 PC마다 다르다):
 
 ```bash
-python tools/build_k8_ble_probe_dex.py --jdk <JDK> --d8 <build-tools>/lib/d8.jar
+python tools/build_api19_dex.py --target probe --jdk <JDK> --d8 <build-tools>/lib/d8.jar
 python tools/build_nemesis_bleprobe.py
 ```
 

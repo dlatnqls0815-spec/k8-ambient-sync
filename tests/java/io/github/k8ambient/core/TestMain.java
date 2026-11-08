@@ -187,6 +187,54 @@ public final class TestMain {
         rejects(new Action() { public void run() { SmlStatus.parse(dreamPurpleOff).toEv6ReferenceState(); } });
     }
 
+    private static void relayProtocol() {
+        String log = "D/SystemService(  688): SYS_SML_STATUS_M_RESP: 0x00 0x9b 0x00 0x21 0x00 0xef 0x0b 0x01 0x01 ";
+        byte[] status = RelayProtocol.parseLogLine(log);
+        check(Arrays.equals(status, new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 11, 1, 1}), "parse OEM log");
+        check(Arrays.equals(RelayProtocol.parseLogLine(
+                "D/SystemService(  691): [MicomEventHandler.handleMessage] SYS_SML_STATUS_M_RESP: 0x01 0x6b 0x01 0x5a 0x01 0x95 0x01 0x01 0x01"),
+                new byte[] {1, 0x6b, 1, 0x5a, 1, (byte) 0x95, 1, 1, 1}), "parse handler variant");
+        check(RelayProtocol.parseLogLine("D/SystemService(  688): [SystemService.setSMLConfiguration] mode: 5, data: 3") == null,
+                "request lines are not status");
+        check(RelayProtocol.parseLogLine("SYS_SML_STATUS_M_RESP: 0x00 0x9b") == null, "short status ignored");
+        check(RelayProtocol.parseLogLine("SYS_SML_STATUS_M_RESP: 0x00 0x9b 0x00 0x21 0x00 0xzz 0x0b 0x01 0x01") == null, "bad hex ignored");
+        check(RelayProtocol.parseLogLine(null) == null, "null log line");
+
+        String line = RelayProtocol.encodeStatus(status);
+        check("SML 009b002100ef0b0101".equals(line), "encode status line");
+        check(Arrays.equals(RelayProtocol.decodeLine(line + "\r"), status), "decode round trip");
+        check(RelayProtocol.decodeLine(RelayProtocol.HELLO) == null && RelayProtocol.decodeLine(" PING ") == null, "control lines");
+        rejects(new Action() { public void run() { RelayProtocol.decodeLine("SET 00"); } });
+        rejects(new Action() { public void run() { RelayProtocol.decodeLine("SML 009b"); } });
+        rejects(new Action() { public void run() { RelayProtocol.decodeLine("SML 009b002100ef0b010"); } });
+        rejects(new Action() { public void run() { RelayProtocol.encodeStatus(new byte[8]); } });
+    }
+
+    private static void k8LotusMapping() {
+        K8LotusMapping mapping = new K8LotusMapping();
+        SmlStatus customMax = SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 11, 1, 1});
+        check(new AmbientState(0x9b, 0x21, 0xef, 100, true).equals(mapping.map(customMax)), "direct color at level 10");
+        SmlStatus customOff = SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 1, 1, 1});
+        AmbientState off = mapping.map(customOff);
+        check(!off.on && off.brightness == 0, "raw 1 is OFF");
+        SmlStatus level1 = SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 2, 1, 1});
+        check(mapping.map(level1).brightness == 10, "raw 2 is level 1");
+        check(mapping.map(SmlStatus.parse(new byte[] {0, 1, 0, 1, 0, 1, 12, 1, 1})) == null, "unknown brightness ignored");
+
+        SmlStatus dreamPurple = SmlStatus.parse(new byte[] {1, 0x6b, 1, 0x5a, 1, (byte) 0x95, 11, 1, 1});
+        check("016b015a0195".equals(K8LotusMapping.themeKey(dreamPurple)), "theme key");
+        AmbientState unknownTheme = mapping.map(dreamPurple);
+        check(unknownTheme.red == 0x9b && unknownTheme.green == 0x21 && unknownTheme.blue == 0xef,
+                "unknown theme keeps previous color");
+        mapping.setThemeColor("016b015a0195", 126, 0, 255);
+        AmbientState assigned = mapping.map(dreamPurple);
+        check(assigned.red == 126 && assigned.green == 0 && assigned.blue == 255, "assigned theme color");
+        mapping.clearThemeColor("016b015a0195");
+        check(new K8LotusMapping().map(dreamPurple).red == 0x6b, "first unknown theme falls back to low bytes");
+        rejects(new Action() { public void run() { new K8LotusMapping().setThemeColor("016B015A0195", 1, 2, 3); } });
+        rejects(new Action() { public void run() { new K8LotusMapping().setThemeColor("016b015a0195", 256, 2, 3); } });
+    }
+
     private static void observedLotusReplay() {
         MockTransport mock = new MockTransport();
         mock.acceptObservedLotus = true;
@@ -467,6 +515,8 @@ public final class TestMain {
         packets();
         k8ProvisionalBrightness();
         k8CapturedStatusesUnderOffLadderCandidate();
+        relayProtocol();
+        k8LotusMapping();
         observedLotusReplay();
         lotusStaticPower();
         userBrightnessCalibration();

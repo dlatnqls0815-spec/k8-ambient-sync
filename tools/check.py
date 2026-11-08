@@ -119,6 +119,9 @@ def main():
         compile_java(javac, (ROOT / "ble-probe-dex/src").rglob("*.java"), output / "ble-probe-api19",
                      android_jar=probe_jar.resolve())
         print("Headless BLE probe: compiled against API 19 android.jar", flush=True)
+        relay_sources = list((ROOT / "car-relay/src").rglob("*.java")) + list((ROOT / "core/src").rglob("*.java"))
+        compile_java(javac, relay_sources, output / "car-relay-api19", android_jar=probe_jar.resolve())
+        print("Car relay: compiled against API 19 android.jar", flush=True)
     else:
         print("Headless BLE probe: API 19 android.jar not found; compile skipped", flush=True)
     if args.diagnostic:

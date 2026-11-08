@@ -1,5 +1,12 @@
 # 진행 상황
 
+## B안(Galaxy 중계) 1차 구현 — 2026-11-08
+
+- 차량 NEMESIS 서비스 `k8ambient.relay`: 순정 로그의 SML 상태를 읽어 클래식 RFCOMM으로 휴대폰에 보낸다(차량 명령 없음).
+- 휴대폰 앱 `io.github.k8ambient.phone`: RFCOMM 수신 → `K8LotusMapping` → 관측 Lotus 프레임 BLE 송신. 전원 명령은 실험 옵션.
+- 공용 로직 `RelayProtocol`, `K8LotusMapping`과 테스트 추가(코어 213). 차량 중계는 API 19로 컴파일, 휴대폰 앱은 SDK 36으로 빌드·서명.
+- 실차·실기기 시험 전이다. 구조·절차는 [B안 문서](research/PLAN_B_RELAY.md).
+
 ## A안 종료: 차량 Bluetooth 스택에 GATT 없음 — 2026-11-08
 
 - 정차 확인 후 `bplus.default.so`(Broadcom 스택 HAL)를 읽기 전용으로 분석했다. GATT 클라이언트 인터페이스가 빌드에 없다.

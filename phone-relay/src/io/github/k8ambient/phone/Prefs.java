@@ -1,0 +1,75 @@
+package io.github.k8ambient.phone;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import io.github.k8ambient.core.K8LotusMapping;
+import java.util.Map;
+import java.util.TreeMap;
+
+/** Saved car/lamp addresses, the experimental power option and user theme colors. */
+final class Prefs {
+    private static final String NAME = "relay", CAR = "car", LAMP = "lamp", POWER = "power", THEMES = "themes";
+    private final SharedPreferences prefs;
+
+    Prefs(Context context) {
+        prefs = context.getApplicationContext().getSharedPreferences(NAME, Context.MODE_PRIVATE);
+    }
+
+    String car() { return prefs.getString(CAR, null); }
+    String lamp() { return prefs.getString(LAMP, null); }
+    boolean power() { return prefs.getBoolean(POWER, false); }
+
+    void setCar(String address) { prefs.edit().putString(CAR, address).apply(); }
+    void setLamp(String address) { prefs.edit().putString(LAMP, address).apply(); }
+    void setPower(boolean value) { prefs.edit().putBoolean(POWER, value).apply(); }
+
+    /** Theme colors as {@code key=r,g,b;key=r,g,b}. Invalid entries are skipped. */
+    Map<String, int[]> themes() {
+        Map<String, int[]> out = new TreeMap<String, int[]>();
+        String text = prefs.getString(THEMES, "");
+        for (String entry : text.split(";")) {
+            String[] parts = entry.split("=");
+            if (parts.length != 2) continue;
+            int[] rgb = parseRgb(parts[1]);
+            if (rgb != null && parts[0].matches("[0-9a-f]{12}")) out.put(parts[0], rgb);
+        }
+        return out;
+    }
+
+    void setTheme(String key, int[] rgb) {
+        Map<String, int[]> map = themes();
+        if (rgb == null) map.remove(key);
+        else map.put(key, rgb);
+        StringBuilder text = new StringBuilder();
+        for (Map.Entry<String, int[]> entry : map.entrySet()) {
+            if (text.length() > 0) text.append(';');
+            int[] c = entry.getValue();
+            text.append(entry.getKey()).append('=').append(c[0]).append(',').append(c[1]).append(',').append(c[2]);
+        }
+        prefs.edit().putString(THEMES, text.toString()).apply();
+    }
+
+    void applyThemes(K8LotusMapping mapping) {
+        for (Map.Entry<String, int[]> entry : themes().entrySet()) {
+            int[] c = entry.getValue();
+            mapping.setThemeColor(entry.getKey(), c[0], c[1], c[2]);
+        }
+    }
+
+    /** Parses {@code r,g,b} with each value 0..255; returns null otherwise. */
+    static int[] parseRgb(String text) {
+        if (text == null) return null;
+        String[] parts = text.trim().split("\\s*,\\s*");
+        if (parts.length != 3) return null;
+        int[] rgb = new int[3];
+        try {
+            for (int i = 0; i < 3; i++) {
+                rgb[i] = Integer.parseInt(parts[i]);
+                if (rgb[i] < 0 || rgb[i] > 255) return null;
+            }
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        return rgb;
+    }
+}
