@@ -8,7 +8,10 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
+import android.util.SparseArray;
+import io.github.k8ambient.core.ColorOrder;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -30,6 +33,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +62,7 @@ public final class MainActivity extends Activity {
         title.setText("K8 앰비언트 중계");
         title.setTextSize(22);
         layout.addView(title);
-        text(layout, "LotusLamp X 앱은 종료하세요. 조명은 한 번에 한 기기에만 연결됩니다.\n"
+        text(layout, "LotusLamp X·Zengge 앱은 종료하세요. 조명은 한 번에 한 기기에만 연결됩니다.\n"
                 + "차량에 NEMESIS 'K8 Ambient Relay'가 설치돼 있어야 합니다.");
         button(layout, "1. 블루투스 권한 허용", new View.OnClickListener() {
             public void onClick(View v) { requestPermissions(PERMISSIONS, 1); }
@@ -66,8 +70,14 @@ public final class MainActivity extends Activity {
         button(layout, "2. 차량 선택 (페어링된 기기)", new View.OnClickListener() {
             public void onClick(View v) { chooseCar(); }
         });
-        button(layout, "3. Lotus 조명 찾기 (8초)", new View.OnClickListener() {
+        button(layout, "3. 조명 찾기 (8초, Lotus·Zengge 둘 다 가능)", new View.OnClickListener() {
             public void onClick(View v) { scanLamp(); }
+        });
+        button(layout, "저장된 조명 지우기", new View.OnClickListener() {
+            public void onClick(View v) { clearLamp(); }
+        });
+        button(layout, "Zengge 색 순서 (빨강·초록이 바뀌어 보이면 GRB)", new View.OnClickListener() {
+            public void onClick(View v) { chooseOrder(); }
         });
         CheckBox power = new CheckBox(this);
         power.setText("순정 꺼짐 때 조명도 끄기 (실험: 앱 코드에서 읽은 전원 명령)");
@@ -82,12 +92,16 @@ public final class MainActivity extends Activity {
         button(layout, "4. 중계 시작", new View.OnClickListener() {
             public void onClick(View v) {
                 if (!granted()) { toast("먼저 권한을 허용하세요"); return; }
-                if (prefs.car() == null || prefs.lamp() == null) { toast("차량과 조명을 먼저 선택하세요"); return; }
+                if (prefs.car() == null || !prefs.anyLamp()) { toast("차량과 조명을 먼저 선택하세요"); return; }
+                prefs.setAuto(true);
                 startForegroundService(new Intent(MainActivity.this, RelayService.class));
             }
         });
-        button(layout, "중계 중지", new View.OnClickListener() {
-            public void onClick(View v) { stopService(new Intent(MainActivity.this, RelayService.class)); }
+        button(layout, "중계 중지 (시동 시 자동 시작도 끔)", new View.OnClickListener() {
+            public void onClick(View v) {
+                prefs.setAuto(false);
+                stopService(new Intent(MainActivity.this, RelayService.class));
+            }
         });
 
         text(layout, "\n순정 테마(드림퍼플 등)일 때 Lotus 색 지정: R,G,B (예: 126,0,255)");
@@ -142,11 +156,14 @@ public final class MainActivity extends Activity {
             StringBuilder s = new StringBuilder("\n");
             s.append("중계: ").append(RelayStatus.running ? "실행 중" : "중지").append('\n');
             s.append("차량: ").append(mask(prefs.car())).append(" / ").append(RelayStatus.car).append('\n');
-            s.append("조명: ").append(mask(prefs.lamp())).append(" / ").append(RelayStatus.lamp).append('\n');
+            s.append("Lotus: ").append(mask(prefs.lamp())).append(" / ").append(RelayStatus.lamp[RelayStatus.LOTUS]).append('\n');
+            s.append("Zengge: ").append(mask(prefs.zengge())).append(" (").append(prefs.zenggeOrder()).append(") / ")
+                    .append(RelayStatus.lamp[RelayStatus.ZENGGE]).append('\n');
             s.append("순정 원시값: ").append(RelayStatus.raw).append('\n');
             s.append("목표: ").append(RelayStatus.target).append('\n');
             s.append("현재 테마: ").append(RelayStatus.themeKey == null ? "직접색 또는 없음" : RelayStatus.themeKey).append('\n');
-            s.append("보낸 패킷: ").append(RelayStatus.packets).append(" / 마지막 ").append(RelayStatus.lastSent).append('\n');
+            s.append("보낸 패킷 Lotus: ").append(RelayStatus.packets[RelayStatus.LOTUS]).append(" / 마지막 ").append(RelayStatus.lastSent[RelayStatus.LOTUS]).append('\n');
+            s.append("보낸 패킷 Zengge: ").append(RelayStatus.packets[RelayStatus.ZENGGE]).append(" / 마지막 ").append(RelayStatus.lastSent[RelayStatus.ZENGGE]).append('\n');
             s.append("저장된 테마 색: ");
             for (Map.Entry<String, int[]> e : prefs.themes().entrySet()) {
                 int[] c = e.getValue();
@@ -191,14 +208,24 @@ public final class MainActivity extends Activity {
         final BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
         if (scanner == null) { toast("블루투스를 켜세요"); return; }
         final Map<String, String> found = new LinkedHashMap<String, String>();
+        final Set<String> zenggeFound = new HashSet<String>();
         final ScanCallback callback = new ScanCallback() {
             @Override public void onScanResult(int type, ScanResult result) {
                 BluetoothDevice device = result.getDevice();
-                boolean lotus = false;
-                List<ParcelUuid> uuids = result.getScanRecord() == null ? null : result.getScanRecord().getServiceUuids();
-                if (uuids != null) for (ParcelUuid id : uuids) lotus |= LotusGattTransport.SERVICE.equals(id.getUuid());
-                String label = (lotus ? "[FFF0] " : "") + name(device) + "  " + mask(device.getAddress()) + "  " + result.getRssi() + "dBm";
-                if (lotus || device.getName() != null) found.put(device.getAddress(), label);
+                boolean lotus = false, zengge = false;
+                ScanRecord record = result.getScanRecord();
+                List<ParcelUuid> uuids = record == null ? null : record.getServiceUuids();
+                if (uuids != null) for (ParcelUuid id : uuids) lotus |= GattTransport.LOTUS_SERVICE.equals(id.getUuid());
+                SparseArray<byte[]> makers = record == null ? null : record.getManufacturerSpecificData();
+                if (makers != null) for (int i = 0; i < makers.size(); i++) zengge |= (makers.keyAt(i) & 0xff00) == 0x5a00;
+                String deviceName = name(device);
+                zengge |= deviceName.startsWith("LEDnetWF");
+                String label = (lotus ? "[Lotus] " : zengge ? "[Zengge] " : "") + deviceName + "  " + mask(device.getAddress())
+                        + "  " + result.getRssi() + "dBm";
+                if (lotus || zengge || !deviceName.startsWith("(")) {
+                    found.put(device.getAddress(), label);
+                    if (zengge) zenggeFound.add(device.getAddress());
+                }
             }
         };
         try {
@@ -207,21 +234,50 @@ public final class MainActivity extends Activity {
             toast("권한 없음");
             return;
         }
-        toast("찾는 중... 휴대폰 Lotus 앱이 연결돼 있으면 안 보일 수 있습니다");
+        toast("찾는 중... Lotus/Zengge 앱이 조명에 연결돼 있으면 안 보일 수 있습니다");
         ui.postDelayed(new Runnable() {
             public void run() {
                 try { scanner.stopScan(callback); } catch (SecurityException ignored) { }
                 final List<String> addresses = new ArrayList<String>(found.keySet());
                 if (addresses.isEmpty()) { toast("찾은 조명 없음"); return; }
                 String[] labels = found.values().toArray(new String[0]);
-                new AlertDialog.Builder(MainActivity.this).setTitle("Lotus 조명 선택").setItems(labels, new DialogInterface.OnClickListener() {
+                new AlertDialog.Builder(MainActivity.this).setTitle("조명 선택 ([Zengge]는 Zengge 칸, 나머지는 Lotus 칸)")
+                        .setItems(labels, new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
-                        prefs.setLamp(addresses.get(which));
-                        toast("조명 저장");
+                        String address = addresses.get(which);
+                        if (zenggeFound.contains(address)) {
+                            prefs.setZengge(address);
+                            toast("Zengge 조명 저장 (중계를 다시 시작하면 적용)");
+                        } else {
+                            prefs.setLamp(address);
+                            toast("Lotus 조명 저장 (중계를 다시 시작하면 적용)");
+                        }
                     }
                 }).show();
             }
         }, 8000);
+    }
+
+    private void clearLamp() {
+        new AlertDialog.Builder(this).setTitle("지울 조명").setItems(new String[] {"Lotus", "Zengge"},
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        if (which == 0) prefs.setLamp(null); else prefs.setZengge(null);
+                        toast("지웠습니다 (중계를 다시 시작하면 적용)");
+                    }
+                }).show();
+    }
+
+    private void chooseOrder() {
+        final ColorOrder[] orders = ColorOrder.values();
+        String[] labels = new String[orders.length];
+        for (int i = 0; i < orders.length; i++) labels[i] = orders[i].name() + (orders[i] == prefs.zenggeOrder() ? "  (현재)" : "");
+        new AlertDialog.Builder(this).setTitle("Zengge 색 순서").setItems(labels, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface d, int which) {
+                prefs.setZenggeOrder(orders[which]);
+                toast(orders[which] + " 저장 (중계를 다시 시작하면 적용)");
+            }
+        }).show();
     }
 
     private boolean granted() {

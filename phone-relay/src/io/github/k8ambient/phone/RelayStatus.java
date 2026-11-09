@@ -7,20 +7,22 @@ import java.util.Locale;
 /** Process-wide status strings shown by the activity. Written by the service threads. */
 final class RelayStatus {
     static volatile boolean running;
-    static volatile String car = "-", lamp = "-", raw = "-", target = "-", lastSent = "-";
+    static final int LOTUS = 0, ZENGGE = 1;
+    static volatile String car = "-", raw = "-", target = "-";
+    static final String[] lamp = {"-", "-"}, lastSent = {"-", "-"};
+    static final long[] packets = new long[2];
     static volatile String themeKey;
-    static volatile long packets;
 
     private RelayStatus() {}
 
     static void car(String text) { car = stamp(text); }
-    static void lamp(String text) { lamp = stamp(text); }
+    static void lamp(int slot, String text) { lamp[slot] = stamp(text); }
 
-    static void sent(byte[] packet) {
-        packets++;
+    static void sent(int slot, byte[] packet) {
+        packets[slot]++;
         StringBuilder hex = new StringBuilder();
         for (byte b : packet) hex.append(String.format(Locale.US, "%02x", b & 255));
-        lastSent = stamp(hex.toString());
+        lastSent[slot] = stamp(hex.toString());
     }
 
     static String stamp(String text) {
@@ -28,8 +30,8 @@ final class RelayStatus {
     }
 
     static void reset() {
-        car = lamp = raw = target = lastSent = "-";
+        car = raw = target = "-";
+        for (int i = 0; i < 2; i++) { lamp[i] = "-"; lastSent[i] = "-"; packets[i] = 0; }
         themeKey = null;
-        packets = 0;
     }
 }

@@ -21,99 +21,146 @@ import io.github.k8ambient.core.K8LotusMapping;
 import io.github.k8ambient.core.RelayProtocol;
 import io.github.k8ambient.core.SmlStatus;
 import io.github.k8ambient.core.SyncEngine;
+import io.github.k8ambient.core.ZenggeFrames;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Plan B phone relay: receives raw K8 SML status from the car relay over RFCOMM, maps it, and
- * drives the LotusLamp X over BLE with the captured frame formats. Power frames (from app bytecode,
- * not yet HCI-verified) are only used when the user enables the experimental option.
+ * drives the saved lamps over BLE with the captured frame formats: a LotusLamp X and/or a Zengge
+ * (LEDnetWF) strip, each on its own thread so a slow or missing lamp never delays the other.
+ * Lotus power frames are only used when the user enables the option.
  */
 public final class RelayService extends Service {
     static final String ACTION_RELOAD_THEMES = "io.github.k8ambient.phone.RELOAD_THEMES";
     private static final String CHANNEL = "relay";
     private static final long TICK_MS = 25, LINK_TIMEOUT_MS = 30000;
 
-    private HandlerThread syncThread;
-    private Handler sync;
-    private SyncEngine engine;
-    private Thread carThread;
+    private final List<Lamp> lamps = new CopyOnWriteArrayList<Lamp>();
+    private boolean started;
+    private Thread carThread, watchdog;
     private volatile boolean stopping, reloadThemes;
     private volatile BluetoothSocket socket;
     private volatile long lastLineAt;
-    // Owned by the sync thread.
-    private final Fader fader = new Fader();
-    private ColorTone tone = ColorTone.NEUTRAL;
-    private long fadeMs;
-    private AmbientState lastMapped;
+
+    /** One lamp: its engine, fader and tone are owned by its own thread. */
+    private final class Lamp {
+        final HandlerThread thread;
+        final Handler handler;
+        final SyncEngine engine;
+        final Fader fader = new Fader();
+        ColorTone tone = ColorTone.NEUTRAL;
+        long fadeMs;
+        AmbientState lastMapped;
+
+        Lamp(String name, SyncEngine engine) {
+            this.engine = engine;
+            thread = new HandlerThread(name);
+            thread.start();
+            handler = new Handler(thread.getLooper());
+            handler.post(new Runnable() { public void run() { Lamp.this.engine.setEnabled(true); } });
+            handler.post(reloadTone);
+            handler.post(tick);
+        }
+
+        final Runnable tick = new Runnable() {
+            public void run() {
+                if (stopping) return;
+                long now = SystemClock.elapsedRealtime();
+                AmbientState shown = fader.current(now);
+                if (shown != null) engine.onState(shown);
+                try { engine.tick(now); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
+                handler.postDelayed(this, TICK_MS);
+            }
+        };
+
+        /** Re-reads tone and fade settings and re-applies the last state at once (live preview). */
+        final Runnable reloadTone = new Runnable() {
+            public void run() {
+                Prefs prefs = new Prefs(RelayService.this);
+                tone = prefs.tone();
+                fadeMs = prefs.fadeMs();
+                if (lastMapped != null) fader.target(tone.apply(lastMapped), SystemClock.elapsedRealtime(), 0);
+            }
+        };
+
+        void show(final AmbientState state) {
+            handler.post(new Runnable() {
+                public void run() {
+                    lastMapped = state;
+                    fader.target(tone.apply(state), SystemClock.elapsedRealtime(), fadeMs);
+                }
+            });
+        }
+
+        void stop() {
+            handler.removeCallbacksAndMessages(null);
+            handler.post(new Runnable() { public void run() { engine.setEnabled(false); } });
+            thread.quitSafely();
+        }
+    }
 
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_RELOAD_THEMES.equals(intent.getAction())) {
             reloadThemes = true;
-            final Handler current = sync;
-            if (current != null) current.post(reloadTone);
+            for (Lamp lamp : lamps) lamp.handler.post(lamp.reloadTone);
             return START_STICKY;
         }
         // startForegroundService() requires startForeground() on every start, even one that exits at once.
         startInForeground();
-        if (engine != null) return START_STICKY;
+        if (started) return START_STICKY;
         final Prefs prefs = new Prefs(this);
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         final BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
-        if (adapter == null || prefs.car() == null || prefs.lamp() == null) {
+        if (adapter == null || prefs.car() == null || !prefs.anyLamp()) {
             RelayStatus.car("차량/조명 선택 필요");
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
+        started = true;
         RelayStatus.reset();
         RelayStatus.running = true;
 
-        LotusGattTransport transport = new LotusGattTransport(this, adapter, prefs.lamp());
-        // ColorTone already scales brightness to the lamp maximum, so the engine passes it through.
-        engine = prefs.power() ? SyncEngine.forLotusWithStaticPower(transport, 100) : SyncEngine.forObservedLotus(transport, 100);
-        syncThread = new HandlerThread("lotus-sync");
-        syncThread.start();
-        sync = new Handler(syncThread.getLooper());
-        sync.post(new Runnable() { public void run() { engine.setEnabled(true); } });
-        sync.post(reloadTone);
-        sync.post(tick);
+        // ColorTone already scales brightness to the lamp maximum, so the engines pass it through.
+        if (prefs.lamp() != null) {
+            GattTransport lotus = GattTransport.lotus(this, adapter, prefs.lamp());
+            lamps.add(new Lamp("lotus-sync", prefs.power()
+                    ? SyncEngine.forLotusWithStaticPower(lotus, 100) : SyncEngine.forObservedLotus(lotus, 100)));
+        }
+        if (prefs.zengge() != null) {
+            GattTransport zengge = GattTransport.zengge(this, adapter, prefs.zengge());
+            lamps.add(new Lamp("zengge-sync",
+                    SyncEngine.forScaledColor(zengge, new ZenggeFrames.Codec(prefs.zenggeOrder()), 100)));
+        }
 
         carThread = new Thread(new Runnable() {
             public void run() { carLoop(adapter, prefs); }
         }, "car-link");
         carThread.start();
+        watchdog = new Thread(new Runnable() {
+            public void run() { watchCarLink(); }
+        }, "car-watchdog");
+        watchdog.start();
         return START_STICKY;
     }
 
-    private final Runnable tick = new Runnable() {
-        public void run() {
-            if (stopping) return;
-            long now = SystemClock.elapsedRealtime();
-            AmbientState shown = fader.current(now);
-            if (shown != null) engine.onState(shown);
-            try { engine.tick(now); } catch (RuntimeException error) { RelayStatus.lamp("오류 " + error.getClass().getSimpleName()); }
+    /** Closes a silent car link so the car loop reconnects. */
+    private void watchCarLink() {
+        while (!stopping) {
             BluetoothSocket open = socket;
-            if (open != null && now - lastLineAt > LINK_TIMEOUT_MS) {
+            if (open != null && SystemClock.elapsedRealtime() - lastLineAt > LINK_TIMEOUT_MS) {
                 RelayStatus.car("응답 없음, 재연결");
                 try { open.close(); } catch (IOException ignored) { }
             }
-            sync.postDelayed(this, TICK_MS);
+            try { Thread.sleep(1000); } catch (InterruptedException e) { return; }
         }
-    };
-
-    /** Re-reads tone and fade settings and re-applies the last state at once (live preview). */
-    private final Runnable reloadTone = new Runnable() {
-        public void run() {
-            Prefs prefs = new Prefs(RelayService.this);
-            tone = prefs.tone();
-            fadeMs = prefs.fadeMs();
-            if (lastMapped != null) fader.target(tone.apply(lastMapped), SystemClock.elapsedRealtime(), 0);
-        }
-    };
+    }
 
     private void carLoop(BluetoothAdapter adapter, Prefs prefs) {
         K8LotusMapping mapping = new K8LotusMapping();
@@ -173,12 +220,7 @@ public final class RelayService extends Service {
         }
         RelayStatus.target = RelayStatus.stamp((state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
                 + " RGB " + state.red + "," + state.green + "," + state.blue);
-        sync.post(new Runnable() {
-            public void run() {
-                lastMapped = state;
-                fader.target(tone.apply(state), SystemClock.elapsedRealtime(), fadeMs);
-            }
-        });
+        for (Lamp lamp : lamps) lamp.show(state);
     }
 
     private void startInForeground() {
@@ -187,7 +229,7 @@ public final class RelayService extends Service {
         Notification notification = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
                 .setContentTitle("K8 앰비언트 중계 실행 중")
-                .setContentText("차량 순정 조명을 Lotus 조명에 맞춥니다")
+                .setContentText("차량 순정 조명을 사제 조명에 맞춥니다")
                 .setOngoing(true)
                 .build();
         startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
@@ -199,11 +241,9 @@ public final class RelayService extends Service {
         BluetoothSocket open = socket;
         if (open != null) try { open.close(); } catch (IOException ignored) { }
         if (carThread != null) carThread.interrupt();
-        if (sync != null) {
-            sync.removeCallbacksAndMessages(null);
-            sync.post(new Runnable() { public void run() { engine.setEnabled(false); } });
-            syncThread.quitSafely();
-        }
+        if (watchdog != null) watchdog.interrupt();
+        for (Lamp lamp : lamps) lamp.stop();
+        lamps.clear();
         super.onDestroy();
     }
 }

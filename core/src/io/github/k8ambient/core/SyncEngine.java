@@ -15,9 +15,15 @@ public final class SyncEngine {
         void disconnect() throws IOException;
     }
 
+    /** Lamps with one color frame and no separate brightness/power frame (e.g. Zengge). */
+    public interface ColorCodec {
+        byte[] color(int red, int green, int blue);
+    }
+
     private final Transport transport;
     private final int maximumBrightness;
     private final boolean observedLotus, lotusPower;
+    private final ColorCodec codec;
     private AmbientState desired;
     private boolean enabled, hadConnection, lastDataWasColor;
     private Boolean sentOn;
@@ -57,8 +63,23 @@ public final class SyncEngine {
         return new SyncEngine(transport, maximumBrightness, true, true);
     }
 
+    /**
+     * One color frame per change: brightness scales the RGB values and OFF is sent as black.
+     * The input should already be toned; 100 = pass-through.
+     */
+    public static SyncEngine forScaledColor(Transport transport, ColorCodec codec, int maximumBrightness) {
+        if (codec == null) throw new IllegalArgumentException("Codec is required");
+        return new SyncEngine(transport, maximumBrightness, false, false, codec);
+    }
+
     private SyncEngine(Transport transport, int maximumBrightness, boolean observedLotus, boolean lotusPower) {
+        this(transport, maximumBrightness, observedLotus, lotusPower, null);
+    }
+
+    private SyncEngine(Transport transport, int maximumBrightness, boolean observedLotus, boolean lotusPower,
+                       ColorCodec codec) {
         if (transport == null) throw new IllegalArgumentException("Transport is required");
+        this.codec = codec;
         AmbientState.checkRange(maximumBrightness, 100);
         this.transport = transport;
         this.maximumBrightness = maximumBrightness;
@@ -121,6 +142,25 @@ public final class SyncEngine {
         AmbientState target = desired;
         // The input must already be normalized; this is not a K8 raw-value conversion.
         int targetBrightness = (target.brightness * maximumBrightness + 50) / 100;
+        if (codec != null) {
+            int red = target.on ? scale(target.red, targetBrightness) : 0;
+            int green = target.on ? scale(target.green, targetBrightness) : 0;
+            int blue = target.on ? scale(target.blue, targetBrightness) : 0;
+            if (red == sentRed && green == sentGreen && blue == sentBlue) return;
+            lastAttempt = monotonicMillis;
+            try {
+                transport.write(codec.color(red, green, blue));
+                successfulWrites++;
+                retryAt = 0;
+                retryDelay = 100;
+                sentRed = red;
+                sentGreen = green;
+                sentBlue = blue;
+            } catch (IOException ignored) {
+                failed(monotonicMillis);
+            }
+            return;
+        }
         boolean colorPending = sentRed != target.red || sentGreen != target.green || sentBlue != target.blue;
         byte[] packet;
         int field;
@@ -168,6 +208,10 @@ public final class SyncEngine {
         } catch (IOException ignored) {
             failed(monotonicMillis);
         }
+    }
+
+    private static int scale(int channel, int percent) {
+        return (channel * percent + 50) / 100;
     }
 
     private void forgetSent() {

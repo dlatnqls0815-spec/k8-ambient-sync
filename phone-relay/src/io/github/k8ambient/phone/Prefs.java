@@ -2,6 +2,7 @@ package io.github.k8ambient.phone;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import io.github.k8ambient.core.ColorOrder;
 import io.github.k8ambient.core.ColorTone;
 import io.github.k8ambient.core.K8LotusMapping;
 import java.util.Map;
@@ -17,7 +18,15 @@ final class Prefs {
     }
 
     String car() { return prefs.getString(CAR, null); }
+    /** LotusLamp X address, or null. */
     String lamp() { return prefs.getString(LAMP, null); }
+    /** Zengge/LEDnetWF address, or null. */
+    String zengge() { return prefs.getString("zengge", null); }
+    void setZengge(String address) { prefs.edit().putString("zengge", address).apply(); }
+    /** The user's strip shows green for red and red for green, so GRB is the default. */
+    ColorOrder zenggeOrder() { return ColorOrder.parse(prefs.getString("zenggeOrder", "GRB")); }
+    void setZenggeOrder(ColorOrder order) { prefs.edit().putString("zenggeOrder", order.name()).apply(); }
+    boolean anyLamp() { return lamp() != null || zengge() != null; }
     boolean power() { return prefs.getBoolean(POWER, false); }
 
     /** Tone/fade settings. Defaults: deeper colors (gamma 1.8), slightly less blue, 20 % max, 0.8 s fade. */
@@ -41,6 +50,10 @@ final class Prefs {
     long fadeMs() { return clamp(get(FADE_MS), 0, 5000); }
 
     private static int clamp(int value, int low, int high) { return Math.max(low, Math.min(high, value)); }
+
+    /** True while the user wants the relay running; auto-start on car connect only then. */
+    boolean auto() { return prefs.getBoolean("auto", false); }
+    void setAuto(boolean value) { prefs.edit().putBoolean("auto", value).apply(); }
 
     void setCar(String address) { prefs.edit().putString(CAR, address).apply(); }
     void setLamp(String address) { prefs.edit().putString(LAMP, address).apply(); }

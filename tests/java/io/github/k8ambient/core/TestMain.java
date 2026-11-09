@@ -224,8 +224,11 @@ public final class TestMain {
         SmlStatus dreamPurple = SmlStatus.parse(new byte[] {1, 0x6b, 1, 0x5a, 1, (byte) 0x95, 11, 1, 1});
         check("016b015a0195".equals(K8LotusMapping.themeKey(dreamPurple)), "theme key");
         AmbientState unknownTheme = mapping.map(dreamPurple);
-        check(unknownTheme.red == 0x9b && unknownTheme.green == 0x21 && unknownTheme.blue == 0xef,
-                "unknown theme keeps previous color");
+        check(unknownTheme.red == 0x6b && unknownTheme.green == 0x5a && unknownTheme.blue == 0x95,
+                "unknown theme uses its low bytes even after a direct color");
+        SmlStatus otherTheme = SmlStatus.parse(new byte[] {1, (byte) 0xd9, 1, (byte) 0xae, 1, 0x5f, 11, 1, 1});
+        AmbientState switched = mapping.map(otherTheme);
+        check(switched.red == 0xd9 && switched.green == 0xae && switched.blue == 0x5f, "switching themes changes color");
         mapping.setThemeColor("016b015a0195", 126, 0, 255);
         AmbientState assigned = mapping.map(dreamPurple);
         check(assigned.red == 126 && assigned.green == 0 && assigned.blue == 255, "assigned theme color");
@@ -553,6 +556,52 @@ public final class TestMain {
         check(!mock.command(7).on, "power remains separate from brightness");
     }
 
+    private static String hex(byte[] bytes) {
+        StringBuilder out = new StringBuilder();
+        for (byte b : bytes) out.append(String.format("%02x", b & 255));
+        return out.toString();
+    }
+
+    private static void zengge() {
+        // Exact writes captured from the Zengge app (sequence numbers 6, 7, 8).
+        check(hex(ZenggeFrames.staticColor(6, 255, 0, 0)).equals("00068000000d0e0b4101ff0000000000010000f032"), "zengge red frame");
+        check(hex(ZenggeFrames.staticColor(7, 0, 255, 0)).equals("00078000000d0e0b410100ff00000000010000f032"), "zengge green frame");
+        check(hex(ZenggeFrames.staticColor(8, 0, 0, 255)).equals("00088000000d0e0b41010000ff000000010000f032"), "zengge blue frame");
+        rejects(new Action() { public void run() { ZenggeFrames.staticColor(0, 256, 0, 0); } });
+        rejects(new Action() { public void run() { ZenggeFrames.wrap(256, new byte[] {1}); } });
+        check(Arrays.equals(ColorOrder.GRB.toWire(255, 10, 20), new int[] {10, 255, 20}), "GRB swaps red and green");
+        check(Arrays.equals(ColorOrder.BGR.toWire(1, 2, 3), new int[] {3, 2, 1}), "BGR reverses");
+        check(Arrays.equals(ColorOrder.RGB.toWire(1, 2, 3), new int[] {1, 2, 3}), "RGB identity");
+        check(ColorOrder.parse("grb") == ColorOrder.GRB && ColorOrder.parse("x") == ColorOrder.RGB, "order parse");
+        for (ColorOrder order : ColorOrder.values()) {
+            int[] w = order.toWire(1, 2, 4);
+            check(w[0] + w[1] + w[2] == 7 && w[0] != w[1] && w[1] != w[2], "order is a permutation " + order);
+        }
+
+        ZenggeFrames.Codec codec = new ZenggeFrames.Codec(ColorOrder.GRB);
+        byte[] first = codec.color(255, 0, 0);
+        check(first[1] == 1 && (first[10] & 255) == 0 && (first[11] & 255) == 255, "codec numbers frames and swaps to GRB");
+        check(codec.color(0, 0, 0)[1] == 2, "codec sequence increments");
+
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forScaledColor(mock, new ZenggeFrames.Codec(ColorOrder.RGB), 100);
+        engine.setEnabled(true);
+        engine.onState(new AmbientState(200, 100, 0, 50, true));
+        engine.tick(0);
+        check(mock.writes.size() == 1 && hex(mock.writes.get(0)).substring(16, 26).equals("4101643200"), "brightness scales RGB");
+        engine.onState(new AmbientState(200, 100, 0, 50, true));
+        engine.tick(100);
+        check(mock.writes.size() == 1, "scaled color deduplicated");
+        engine.onState(new AmbientState(200, 100, 0, 50, false));
+        engine.tick(200);
+        check(mock.writes.size() == 2 && hex(mock.writes.get(1)).substring(16, 26).equals("4101000000"), "off is black");
+        engine.onState(new AmbientState(200, 100, 0, 100, true));
+        engine.tick(260);
+        check(mock.writes.size() == 3 && hex(mock.writes.get(2)).substring(16, 26).equals("4101c86400"), "on restores color");
+        rejects(new Action() { public void run() { SyncEngine.forScaledColor(new MockTransport(), null, 100); } });
+    }
+
     public static void main(String[] args) {
         stateAndRawStatus();
         packets();
@@ -562,6 +611,7 @@ public final class TestMain {
         k8LotusMapping();
         colorTone();
         fader();
+        zengge();
         observedLotusReplay();
         lotusStaticPower();
         userBrightnessCalibration();

@@ -13,13 +13,13 @@ import java.util.Map;
  *     to the aftermarket maximum, 20 % by default). Other raw values are ignored.</li>
  * <li>All three channel high bytes 0x00 = direct color; the low bytes are the RGB value.</li>
  * <li>Otherwise the value is a theme code. A user-assigned color is used when known; an unknown
- *     theme keeps the previous color, or the low bytes when there is no previous color.</li>
+ *     theme uses its low bytes, which the user confirmed on 2026-11-09 match the factory colors
+ *     (keeping the previous color made theme changes look stuck until a relay restart).</li>
  * </ul>
  * Not thread-safe; use from one thread.
  */
 public final class K8LotusMapping {
     private final Map<String, int[]> themeColors = new HashMap<String, int[]>();
-    private int[] lastColor;
 
     /** Theme key: the six raw channel bytes as lower-case hex, e.g. {@code 016b015a0195}. */
     public static String themeKey(SmlStatus status) {
@@ -53,10 +53,8 @@ public final class K8LotusMapping {
         } else {
             int[] assigned = themeColors.get(themeKey(status));
             if (assigned != null) color = assigned.clone();
-            else if (lastColor != null) color = lastColor.clone();
             else color = new int[] {status.redRaw & 255, status.greenRaw & 255, status.blueRaw & 255};
         }
-        lastColor = color.clone();
         boolean on = raw != 1;
         return new AmbientState(color[0], color[1], color[2], on ? (raw - 1) * 10 : 0, on);
     }

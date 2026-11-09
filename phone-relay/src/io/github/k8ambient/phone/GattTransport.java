@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothStatusCodes;
@@ -14,28 +15,50 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * Blocking BLE transport to the LotusLamp X controller (service 0xFFF0, write 0xFFF3), matching the
- * SyncEngine contract: every call comes from the engine's single thread and completes synchronously.
+ * Blocking BLE transport (write without response), matching the SyncEngine contract: every call
+ * comes from the engine's single thread and completes synchronously.
+ * LotusLamp X: service 0xFFF0, write 0xFFF3. Zengge/LEDnetWF: service 0xFFFF, write 0xFF01, notify 0xFF02
+ * (the Zengge app enables it before writing, so this does too).
  */
-final class LotusGattTransport implements SyncEngine.Transport {
-    static final UUID SERVICE = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
-    static final UUID WRITE = UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb");
+final class GattTransport implements SyncEngine.Transport {
+    static final UUID LOTUS_SERVICE = uuid16(0xfff0), LOTUS_WRITE = uuid16(0xfff3);
+    static final UUID ZENGGE_SERVICE = uuid16(0xffff), ZENGGE_WRITE = uuid16(0xff01), ZENGGE_NOTIFY = uuid16(0xff02);
+    private static final UUID CCCD = uuid16(0x2902);
     private static final long CONNECT_MS = 12000, DISCOVER_MS = 8000, WRITE_MS = 1000;
+
+    static UUID uuid16(int value) {
+        return UUID.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", value));
+    }
+
+    static GattTransport lotus(Context context, BluetoothAdapter adapter, String address) {
+        return new GattTransport(context, adapter, address, RelayStatus.LOTUS, LOTUS_SERVICE, LOTUS_WRITE, null);
+    }
+
+    static GattTransport zengge(Context context, BluetoothAdapter adapter, String address) {
+        return new GattTransport(context, adapter, address, RelayStatus.ZENGGE, ZENGGE_SERVICE, ZENGGE_WRITE, ZENGGE_NOTIFY);
+    }
 
     private final Context context;
     private final BluetoothAdapter adapter;
     private final String address;
+    private final int slot;
+    private final UUID serviceId, writeId, notifyId;
     private final Object lock = new Object();
     private BluetoothGatt gatt;
     private BluetoothGattCharacteristic characteristic;
     private volatile boolean ready;
     private int state = -1, discoverStatus = -1, writeStatus = -1;
-    private boolean discovered, writeDone;
+    private boolean discovered, writeDone, descriptorDone;
 
-    LotusGattTransport(Context context, BluetoothAdapter adapter, String address) {
+    private GattTransport(Context context, BluetoothAdapter adapter, String address, int slot,
+                          UUID serviceId, UUID writeId, UUID notifyId) {
         this.context = context.getApplicationContext();
         this.adapter = adapter;
         this.address = address;
+        this.slot = slot;
+        this.serviceId = serviceId;
+        this.writeId = writeId;
+        this.notifyId = notifyId;
     }
 
     private final BluetoothGattCallback callback = new BluetoothGattCallback() {
@@ -45,13 +68,20 @@ final class LotusGattTransport implements SyncEngine.Transport {
                 if (newState != BluetoothProfile.STATE_CONNECTED) ready = false;
                 lock.notifyAll();
             }
-            RelayStatus.lamp(newState == BluetoothProfile.STATE_CONNECTED ? "연결됨" : "끊김(" + status + ")");
+            RelayStatus.lamp(slot, newState == BluetoothProfile.STATE_CONNECTED ? "연결됨" : "끊김(" + status + ")");
         }
 
         @Override public void onServicesDiscovered(BluetoothGatt g, int status) {
             synchronized (lock) {
                 discoverStatus = status;
                 discovered = true;
+                lock.notifyAll();
+            }
+        }
+
+        @Override public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor d, int status) {
+            synchronized (lock) {
+                descriptorDone = true;
                 lock.notifyAll();
             }
         }
@@ -71,7 +101,7 @@ final class LotusGattTransport implements SyncEngine.Transport {
 
     @Override public void connect() throws IOException {
         closeGatt();
-        RelayStatus.lamp("연결 중");
+        RelayStatus.lamp(slot, "연결 중");
         try {
             BluetoothDevice device = adapter.getRemoteDevice(address);
             synchronized (lock) {
@@ -90,23 +120,31 @@ final class LotusGattTransport implements SyncEngine.Transport {
                 await(DISCOVER_MS, new Done() { public boolean done() { return discovered || state == BluetoothProfile.STATE_DISCONNECTED; } });
                 if (!discovered || discoverStatus != BluetoothGatt.GATT_SUCCESS) throw new IOException("discovery failed");
             }
-            BluetoothGattService service = opened.getService(SERVICE);
-            BluetoothGattCharacteristic found = service == null ? null : service.getCharacteristic(WRITE);
-            if (found == null) throw new IOException("FFF0/FFF3 not found");
+            BluetoothGattService service = opened.getService(serviceId);
+            BluetoothGattCharacteristic found = service == null ? null : service.getCharacteristic(writeId);
+            if (found == null) throw new IOException("조명 종류가 다름(서비스 없음)");
+            BluetoothGattCharacteristic notify = notifyId == null || service == null ? null : service.getCharacteristic(notifyId);
+            BluetoothGattDescriptor cccd = notify == null ? null : notify.getDescriptor(CCCD);
+            if (cccd != null && opened.setCharacteristicNotification(notify, true)) {
+                synchronized (lock) { descriptorDone = false; }
+                if (opened.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothStatusCodes.SUCCESS) {
+                    synchronized (lock) { await(WRITE_MS, new Done() { public boolean done() { return descriptorDone; } }); }
+                }
+            }
             characteristic = found;
             ready = true;
-            RelayStatus.lamp("준비됨");
+            RelayStatus.lamp(slot, "준비됨");
         } catch (SecurityException error) {
             closeGatt();
-            RelayStatus.lamp("권한 없음");
+            RelayStatus.lamp(slot, "권한 없음");
             throw new IOException("permission");
         } catch (IOException error) {
             closeGatt();
-            RelayStatus.lamp("연결 실패: " + error.getMessage());
+            RelayStatus.lamp(slot, "연결 실패: " + error.getMessage());
             throw error;
         } catch (IllegalArgumentException error) {
             closeGatt();
-            RelayStatus.lamp("주소 오류");
+            RelayStatus.lamp(slot, "주소 오류");
             throw new IOException("address");
         }
     }
@@ -129,7 +167,7 @@ final class LotusGattTransport implements SyncEngine.Transport {
             // Android still reports a callback for write-without-response; a missing one is treated as busy.
             if (!writeDone || writeStatus != BluetoothGatt.GATT_SUCCESS) throw new IOException("write not confirmed");
         }
-        RelayStatus.sent(packet);
+        RelayStatus.sent(slot, packet);
     }
 
     @Override public void disconnect() {
