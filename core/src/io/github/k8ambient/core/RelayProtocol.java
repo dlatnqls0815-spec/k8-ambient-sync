@@ -10,6 +10,7 @@ import java.util.UUID;
  * <p>Car to phone, one ASCII line each: {@code K8AMB 1} on connect, {@code SML <hex>} for a raw
  * SML status (at least 9 bytes), {@code ALERT 1}/{@code ALERT 0} when the navigation's speed camera
  * alert starts/ends (the factory light then blinks red; the phone should switch without fading),
+ * {@code MODE <hex>} when the drive mode changes (e.g. {@code MODE 03}),
  * {@code PING} as keepalive. The phone never sends commands. Older phones ignore ALERT lines.
  */
 public final class RelayProtocol {
@@ -20,6 +21,8 @@ public final class RelayProtocol {
     static final int MAX_STATUS_BYTES = 32;
     public static final String ALERT_ON = "ALERT 1", ALERT_OFF = "ALERT 0";
     private static final String LOG_MARKER = "SYS_SML_STATUS_M_RESP:";
+    public static final String MODE_PREFIX = "MODE ";
+    private static final String DRIVE_MODE_MARKER = "SYS_DRIVE_MODE_DATA_M_RESP:";
     private static final String ALERT_ACTION = "NaviCameraAlertState", ALERT_FIELD = "mTempCameraAlertState :";
 
     private RelayProtocol() {}
@@ -36,7 +39,8 @@ public final class RelayProtocol {
     public static byte[] decodeLine(String line) {
         if (line == null) throw new IllegalArgumentException("Missing line");
         String text = line.trim();
-        if (HELLO.equals(text) || PING.equals(text) || ALERT_ON.equals(text) || ALERT_OFF.equals(text)) return null;
+        if (HELLO.equals(text) || PING.equals(text) || ALERT_ON.equals(text) || ALERT_OFF.equals(text)
+                || decodeDriveMode(text) != null) return null;
         if (!text.startsWith("SML ")) throw new IllegalArgumentException("Unknown relay line");
         String hex = text.substring(4);
         if (hex.length() % 2 != 0 || hex.length() < 18 || hex.length() > MAX_STATUS_BYTES * 2)
@@ -44,6 +48,42 @@ public final class RelayProtocol {
         byte[] out = new byte[hex.length() / 2];
         for (int i = 0; i < out.length; i++) out[i] = (byte) ((digit(hex.charAt(2 * i)) << 4) | digit(hex.charAt(2 * i + 1)));
         return out;
+    }
+
+    public static String encodeDriveMode(int mode) {
+        if (mode < 1 || mode > 255) throw new IllegalArgumentException("Drive mode must be 1..255");
+        return MODE_PREFIX + String.format(Locale.US, "%02x", mode);
+    }
+
+    /** The drive mode of a {@code MODE} line, or null for any other line. */
+    public static Integer decodeDriveMode(String line) {
+        if (line == null) return null;
+        String text = line.trim();
+        if (!text.startsWith(MODE_PREFIX) || text.length() != MODE_PREFIX.length() + 2) return null;
+        try {
+            int mode = (digit(text.charAt(5)) << 4) | digit(text.charAt(6));
+            return mode == 0 ? null : Integer.valueOf(mode);
+        } catch (IllegalArgumentException bad) {
+            return null;
+        }
+    }
+
+    /**
+     * Drive mode from {@code SystemService: SYS_DRIVE_MODE_DATA_M_RESP: 0x0f 0x01 0x03 ...} (byte 2).
+     * The head unit reports 0x00 a moment after each change; that and unrelated lines return null.
+     */
+    public static Integer parseDriveModeLogLine(String line) {
+        if (line == null) return null;
+        int at = line.indexOf(DRIVE_MODE_MARKER);
+        if (at < 0) return null;
+        String[] parts = line.substring(at + DRIVE_MODE_MARKER.length()).trim().split("\\s+");
+        if (parts.length < 3 || parts[2].length() != 4 || !parts[2].startsWith("0x")) return null;
+        try {
+            int mode = (digit(parts[2].charAt(2)) << 4) | digit(parts[2].charAt(3));
+            return mode == 0 ? null : Integer.valueOf(mode);
+        } catch (IllegalArgumentException bad) {
+            return null;
+        }
     }
 
     public static String encodeAlert(boolean active) {

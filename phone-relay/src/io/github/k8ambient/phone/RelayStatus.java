@@ -12,6 +12,8 @@ final class RelayStatus {
     static final String[] lamp = {"-", "-"}, lastSent = {"-", "-"};
     static final long[] packets = new long[2];
     static volatile String themeKey;
+    static volatile int driveMode;
+    static volatile boolean driveLinked;
 
     private RelayStatus() {}
 

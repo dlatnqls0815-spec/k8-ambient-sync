@@ -16,6 +16,7 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import io.github.k8ambient.core.AmbientState;
 import io.github.k8ambient.core.ColorTone;
+import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.Fader;
 import io.github.k8ambient.core.K8LotusMapping;
 import io.github.k8ambient.core.RelayProtocol;
@@ -173,6 +174,9 @@ public final class RelayService extends Service {
     private void carLoop(BluetoothAdapter adapter, Prefs prefs) {
         K8LotusMapping mapping = new K8LotusMapping();
         prefs.applyThemes(mapping);
+        DriveModeLight driveLight = prefs.driveModeLight();
+        int driveMode = 0;
+        SmlStatus lastStatus = null;
         long backoff = 3000;
         while (!stopping) {
             try {
@@ -193,6 +197,16 @@ public final class RelayService extends Service {
                         reloadThemes = false;
                         mapping = new K8LotusMapping();
                         prefs.applyThemes(mapping);
+                        driveLight = prefs.driveModeLight();
+                        if (lastStatus != null) handleStatus(mapping, driveLight, driveMode, lastStatus);
+                    }
+                    Integer mode = RelayProtocol.decodeDriveMode(line);
+                    if (mode != null) {
+                        driveMode = mode.intValue();
+                        RelayStatus.driveMode = driveMode;
+                        // The status does not change with the drive mode, so re-apply the last one.
+                        if (lastStatus != null) handleStatus(mapping, driveLight, driveMode, lastStatus);
+                        continue;
                     }
                     Boolean alert = RelayProtocol.decodeAlert(line);
                     if (alert != null) {
@@ -204,7 +218,8 @@ public final class RelayService extends Service {
                     try { raw = RelayProtocol.decodeLine(line); }
                     catch (IllegalArgumentException bad) { continue; }
                     if (raw == null) continue;
-                    handleStatus(mapping, SmlStatus.parse(raw));
+                    lastStatus = SmlStatus.parse(raw);
+                    handleStatus(mapping, driveLight, driveMode, lastStatus);
                 }
                 RelayStatus.car("연결 끊김");
             } catch (IOException error) {
@@ -225,10 +240,14 @@ public final class RelayService extends Service {
         }
     }
 
-    private void handleStatus(K8LotusMapping mapping, SmlStatus status) {
+    private void handleStatus(K8LotusMapping mapping, DriveModeLight driveLight, int driveMode, SmlStatus status) {
         RelayStatus.raw = RelayStatus.stamp(RelayProtocol.encodeStatus(status.rawBytes()).substring(4));
         RelayStatus.themeKey = K8LotusMapping.isDirectColor(status) ? null : K8LotusMapping.themeKey(status);
-        final AmbientState state = mapping.map(status);
+        AmbientState mapped = mapping.map(status);
+        RelayStatus.driveLinked = DriveModeLight.linked(status);
+        // A camera alert (red blink) always wins over the drive mode color, as on the car.
+        final AmbientState state = mapped == null || SystemClock.elapsedRealtime() < alertUntil
+                ? mapped : driveLight.apply(mapped, status, driveMode);
         if (state == null) {
             RelayStatus.target = RelayStatus.stamp("알 수 없는 밝기 " + status.brightnessRaw);
             return;

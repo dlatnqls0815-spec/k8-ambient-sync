@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import io.github.k8ambient.core.ColorOrder;
 import io.github.k8ambient.core.ColorTone;
+import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.K8LotusMapping;
 import java.util.Map;
 import java.util.TreeMap;
@@ -62,6 +63,27 @@ final class Prefs {
     void setCar(String address) { prefs.edit().putString(CAR, address).apply(); }
     void setLamp(String address) { prefs.edit().putString(LAMP, address).apply(); }
     void setPower(boolean value) { prefs.edit().putBoolean(POWER, value).apply(); }
+
+    /** Factory drive mode colors (ECO "Refreshing Ocean", SPORT red); SMART uses the user color. */
+    static final String DRIVE_ECO = "driveEco", DRIVE_SPORT = "driveSport";
+    static final String DEFAULT_ECO = "50,154,158", DEFAULT_SPORT = "255,0,0";
+
+    int[] driveColor(String key) {
+        int[] rgb = parseRgb(prefs.getString(key, null));
+        return rgb != null ? rgb : parseRgb(DRIVE_ECO.equals(key) ? DEFAULT_ECO : DEFAULT_SPORT);
+    }
+
+    void setDriveColor(String key, int[] rgb) {
+        prefs.edit().putString(key, rgb[0] + "," + rgb[1] + "," + rgb[2]).apply();
+    }
+
+    DriveModeLight driveModeLight() {
+        DriveModeLight light = new DriveModeLight();
+        int[] eco = driveColor(DRIVE_ECO), sport = driveColor(DRIVE_SPORT);
+        light.setColor(DriveModeLight.ECO, eco[0], eco[1], eco[2]);
+        light.setColor(DriveModeLight.SPORT, sport[0], sport[1], sport[2]);
+        return light;
+    }
 
     /** Theme colors as {@code key=r,g,b;key=r,g,b}. Invalid entries are skipped. */
     Map<String, int[]> themes() {

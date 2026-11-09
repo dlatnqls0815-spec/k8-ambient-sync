@@ -43,10 +43,14 @@ public final class CarRelay {
     /** Navigation speed camera alert (factory light blinks red); forwarded so the phone skips fades. */
     private boolean alert;
     private long alertVersion;
+    /** Last non-zero drive mode code from SYS_DRIVE_MODE_DATA_M_RESP (0 = not seen yet). */
+    private int driveMode;
+    private long modeVersion;
 
     public static void main(String[] args) {
         Looper.prepareMainLooper();
         final CarRelay relay = new CarRelay();
+        relay.restoreFromOwnLog(new File(RECORD_DIR, "relay.log"));
         start(new Runnable() { public void run() { relay.readLog(); } }, "sml-log");
         start(new Runnable() { public void run() { relay.serve(); } }, "rfcomm");
         start(new Runnable() { public void run() { record(); } }, "recorder");
@@ -80,6 +84,8 @@ public final class CarRelay {
                     if (status != null) publish(status);
                     Boolean camera = RelayProtocol.parseAlertLogLine(line);
                     if (camera != null) publishAlert(camera.booleanValue());
+                    Integer mode = RelayProtocol.parseDriveModeLogLine(line);
+                    if (mode != null) publishMode(mode.intValue());
                 }
                 log("logcat ended");
             } catch (IOException error) {
@@ -161,6 +167,55 @@ public final class CarRelay {
         log("alert " + (active ? 1 : 0));
     }
 
+    /**
+     * The car reports the ambient status and drive mode only when they change, so after a restart the
+     * relay would have nothing to send. Restore the last values this relay itself logged
+     * ("<time> state SML <hex>", "<time> mode <hex>"). Reads only its own log file.
+     */
+    void restoreFromOwnLog(File file) {
+        byte[] status = null;
+        int mode = 0;
+        BufferedReader reader = null;
+        try {
+            reader = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(file), "US-ASCII"));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                int at = line.indexOf(" state ");
+                if (at > 0) {
+                    try {
+                        byte[] raw = RelayProtocol.decodeLine(line.substring(at + 7));
+                        if (raw != null) status = raw;
+                    } catch (IllegalArgumentException ignored) { }
+                    continue;
+                }
+                at = line.indexOf(" mode ");
+                if (at > 0) {
+                    Integer parsed = RelayProtocol.decodeDriveMode(RelayProtocol.MODE_PREFIX + line.substring(at + 6).trim());
+                    if (parsed != null) mode = parsed.intValue();
+                }
+            }
+        } catch (IOException ignored) {
+            // No previous log: start empty as before.
+        } finally {
+            if (reader != null) try { reader.close(); } catch (IOException ignored) { }
+        }
+        synchronized (lock) {
+            if (status != null) { latest = status; version++; }
+            if (mode != 0) { driveMode = mode; modeVersion++; }
+        }
+        log("restored " + (status == null ? "-" : RelayProtocol.encodeStatus(status)) + " mode " + mode);
+    }
+
+    private void publishMode(int mode) {
+        synchronized (lock) {
+            if (driveMode == mode) return;
+            driveMode = mode;
+            modeVersion++;
+            lock.notifyAll();
+        }
+        log("mode " + RelayProtocol.encodeDriveMode(mode).substring(5));
+    }
+
     private void serve() {
         while (true) {
             BluetoothServerSocket server = null;
@@ -196,21 +251,29 @@ public final class CarRelay {
 
     private void stream(OutputStream output) throws IOException {
         write(output, RelayProtocol.HELLO);
-        long sent = -1, sentAlert = 0;
+        long sent = -1, sentAlert = 0, sentMode = 0;
         while (true) {
             byte[] status;
-            long current, currentAlert;
+            long current, currentAlert, currentMode;
             boolean active;
+            int mode;
             synchronized (lock) {
-                if ((latest == null || version == sent) && alertVersion == sentAlert) {
+                if ((latest == null || version == sent) && alertVersion == sentAlert && modeVersion == sentMode) {
                     try { lock.wait(PING_MS); } catch (InterruptedException e) { throw new IOException("interrupted"); }
                 }
                 status = latest;
                 current = version;
                 active = alert;
                 currentAlert = alertVersion;
+                mode = driveMode;
+                currentMode = modeVersion;
             }
             boolean wrote = false;
+            if (currentMode != sentMode) {
+                write(output, RelayProtocol.encodeDriveMode(mode));
+                sentMode = currentMode;
+                wrote = true;
+            }
             // The alert precedes the status it explains, so the phone already knows not to fade.
             if (currentAlert != sentAlert) {
                 write(output, RelayProtocol.encodeAlert(active));

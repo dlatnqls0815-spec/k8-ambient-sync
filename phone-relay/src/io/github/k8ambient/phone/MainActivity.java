@@ -12,6 +12,7 @@ import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.util.SparseArray;
 import io.github.k8ambient.core.ColorOrder;
+import io.github.k8ambient.core.DriveModeLight;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -116,6 +117,10 @@ public final class MainActivity extends Activity {
             public void onClick(View v) { assignTheme(null, false); }
         });
 
+        text(layout, "\n드라이브 모드 연동(순정 설정이 켜져 있을 때): 스마트는 사용자 색, 에코·스포츠는 아래 색");
+        driveColorRow(layout, "에코 색 R,G,B", Prefs.DRIVE_ECO);
+        driveColorRow(layout, "스포츠 색 R,G,B", Prefs.DRIVE_SPORT);
+
         text(layout, "\n부드러운 전환·색 톤 (움직이면 조명에 바로 반영)");
         slider(layout, "전환 시간", Prefs.FADE_MS, 0, 3000, 100, "ms");
         slider(layout, "색 깊이(감마 ×0.1, 높을수록 진하고 덜 하얗게)", Prefs.GAMMA, 10, 30, 1, "");
@@ -162,6 +167,8 @@ public final class MainActivity extends Activity {
                     .append(RelayStatus.lamp[RelayStatus.ZENGGE]).append('\n');
             s.append("순정 원시값: ").append(RelayStatus.raw).append('\n');
             s.append("목표: ").append(RelayStatus.target).append('\n');
+            s.append("드라이브 모드: ").append(modeName(RelayStatus.driveMode))
+                    .append(RelayStatus.driveLinked ? " (순정 연동 켜짐)" : " (순정 연동 꺼짐)").append('\n');
             s.append("현재 테마: ").append(RelayStatus.themeKey == null ? "직접색 또는 없음" : RelayStatus.themeKey).append('\n');
             s.append("보낸 패킷 Lotus: ").append(RelayStatus.packets[RelayStatus.LOTUS]).append(" / 마지막 ").append(RelayStatus.lastSent[RelayStatus.LOTUS]).append('\n');
             s.append("보낸 패킷 Zengge: ").append(RelayStatus.packets[RelayStatus.ZENGGE]).append(" / 마지막 ").append(RelayStatus.lastSent[RelayStatus.ZENGGE]).append('\n');
@@ -174,6 +181,33 @@ public final class MainActivity extends Activity {
             ui.postDelayed(this, 1000);
         }
     };
+
+    static String modeName(int mode) {
+        if (mode == DriveModeLight.ECO) return "에코";
+        if (mode == DriveModeLight.SPORT) return "스포츠";
+        if (mode == DriveModeLight.SMART) return "스마트";
+        return mode == 0 ? "아직 모름(바꾸면 표시)" : String.format("코드 %02x", mode);
+    }
+
+    private void driveColorRow(LinearLayout layout, String label, final String key) {
+        final EditText field = new EditText(this);
+        field.setInputType(InputType.TYPE_CLASS_TEXT);
+        int[] c = prefs.driveColor(key);
+        field.setText(c[0] + "," + c[1] + "," + c[2]);
+        field.setHint(label);
+        layout.addView(field);
+        button(layout, label + " 저장", new View.OnClickListener() {
+            public void onClick(View v) {
+                int[] rgb = Prefs.parseRgb(field.getText().toString());
+                if (rgb == null) { toast("R,G,B를 0~255로 입력하세요"); return; }
+                prefs.setDriveColor(key, rgb);
+                if (RelayStatus.running) {
+                    startService(new Intent(MainActivity.this, RelayService.class).setAction(RelayService.ACTION_RELOAD_THEMES));
+                }
+                toast("저장했습니다");
+            }
+        });
+    }
 
     private void assignTheme(int[] rgb, boolean requireColor) {
         String key = RelayStatus.themeKey;

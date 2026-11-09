@@ -223,6 +223,41 @@ public final class TestMain {
         check(Boolean.FALSE.equals(RelayProtocol.decodeAlert(RelayProtocol.encodeAlert(false))), "alert off round trip");
         check(RelayProtocol.decodeAlert(line) == null, "status line is not an alert");
         check(RelayProtocol.decodeLine(RelayProtocol.ALERT_ON) == null, "alert line is a valid non-status line");
+
+        String modeLog = "D/SystemService(  693): SYS_DRIVE_MODE_DATA_M_RESP: 0x0f 0x01 0x03 0x00 0x60 0x00 0x45 0x52 0xff 0xff 0xff 0xff 0xff 0xff 0x00 0x00 0x07 0x06 ";
+        check(Integer.valueOf(3).equals(RelayProtocol.parseDriveModeLogLine(modeLog)), "drive mode from log");
+        check(RelayProtocol.parseDriveModeLogLine(modeLog.replace("0x01 0x03", "0x01 0x00")) == null, "transient zero ignored");
+        check(RelayProtocol.parseDriveModeLogLine("D/SystemService(  693): [SystemService.updateDriveModeData] data: 0x0f 0x01 0x03") == null,
+                "update echo line ignored");
+        check(RelayProtocol.parseDriveModeLogLine("SYS_DRIVE_MODE_DATA_M_RESP: 0x0f") == null && RelayProtocol.parseDriveModeLogLine(null) == null,
+                "short or null mode line");
+        check("MODE 06".equals(RelayProtocol.encodeDriveMode(6)), "encode mode");
+        check(Integer.valueOf(2).equals(RelayProtocol.decodeDriveMode(" MODE 02\r")), "decode mode");
+        check(RelayProtocol.decodeDriveMode("MODE 00") == null && RelayProtocol.decodeDriveMode("MODE 0g") == null
+                && RelayProtocol.decodeDriveMode("MODE 123") == null, "bad mode lines");
+        check(RelayProtocol.decodeLine("MODE 03") == null, "mode line is a valid non-status line");
+        rejects(new Action() { public void run() { RelayProtocol.encodeDriveMode(0); } });
+    }
+
+    private static void driveModeLight() {
+        SmlStatus linked = SmlStatus.parse(new byte[] {0, (byte) 0xd5, 0, 0x1b, 0, (byte) 0xc0, 11, 1, 2});
+        SmlStatus unlinked = SmlStatus.parse(new byte[] {0, (byte) 0xd5, 0, 0x1b, 0, (byte) 0xc0, 11, 1, 1});
+        check(DriveModeLight.linked(linked) && !DriveModeLight.linked(unlinked), "link flag is status byte 8");
+        DriveModeLight light = new DriveModeLight();
+        light.setColor(DriveModeLight.SPORT, 255, 0, 0);
+        light.setColor(DriveModeLight.ECO, 0, 120, 200);
+        AmbientState user = new K8LotusMapping().map(linked);
+        AmbientState sport = light.apply(user, linked, DriveModeLight.SPORT);
+        check(sport.red == 255 && sport.green == 0 && sport.brightness == user.brightness && sport.on, "sport color keeps brightness");
+        check(light.apply(user, linked, DriveModeLight.ECO).blue == 200, "eco color");
+        check(light.apply(user, linked, DriveModeLight.SMART) == user, "smart keeps the user color");
+        check(light.apply(user, linked, 0) == user, "unknown mode keeps the user color");
+        check(light.apply(user, unlinked, DriveModeLight.SPORT) == user, "option off keeps the user color");
+        AmbientState off = new AmbientState(0xd5, 0x1b, 0xc0, 0, false);
+        check(!light.apply(off, linked, DriveModeLight.SPORT).on, "mode color does not turn the light on");
+        check(DriveModeLight.known(3) && !DriveModeLight.known(4), "known modes");
+        rejects(new Action() { public void run() { new DriveModeLight().setColor(DriveModeLight.SMART, 1, 2, 3); } });
+        rejects(new Action() { public void run() { new DriveModeLight().setColor(DriveModeLight.ECO, 256, 2, 3); } });
     }
 
     private static void k8LotusMapping() {
@@ -627,6 +662,7 @@ public final class TestMain {
         colorTone();
         fader();
         zengge();
+        driveModeLight();
         observedLotusReplay();
         lotusStaticPower();
         userBrightnessCalibration();
