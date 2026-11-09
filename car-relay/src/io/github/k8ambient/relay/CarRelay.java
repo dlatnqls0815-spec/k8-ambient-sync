@@ -6,10 +6,13 @@ import android.bluetooth.BluetoothSocket;
 import android.os.Looper;
 import io.github.k8ambient.core.RelayProtocol;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
 /**
  * K8 car side of plan B, run by a NEMESIS service with app_process (API 19).
@@ -17,9 +20,23 @@ import java.util.Arrays;
  * <p>Reads the OEM SystemService SML status lines from the system log (read-only) and serves the
  * latest raw status over a classic Bluetooth RFCOMM server to one bonded phone. It sends no
  * vehicle, MICOM or lighting commands and never changes Bluetooth state.
+ *
+ * <p>Since 0.2.0 it also records, read-only, the head unit's own log lines that may explain the
+ * factory overspeed red/blink ambient effect (navigation cluster info, MICOM frames, SML, speed and
+ * camera lines) into a rotating file next to the relay log, for offline analysis.
  */
 public final class CarRelay {
     private static final long PING_MS = 10000, RETRY_MS = 5000;
+    static final String RECORD_DIR = "/data/nemesis/logs/k8ambient.relay";
+    /** About 20 MB/hour parked; 6 x 16 MB keeps a few hours while using ~13 % of the free /data. */
+    private static final long RECORD_FILE_BYTES = 16L * 1024 * 1024;
+    private static final int RECORD_FILES = 6;
+    /** Tags recorded in full ("-v time" lines: date, time, then "X/Tag"). */
+    static final Pattern RECORD_TAGS = Pattern.compile("^\\S+ \\S+ [VDIWEF]/(ClusterService|NavigationCluster|SystemService|MicomD|Navi|CoNA)\\b.*");
+    /** Other lines recorded when they mention one of these words. */
+    static final Pattern RECORD_WORDS = Pattern.compile("(?i).*(speed|trap|camera|alarm|warning|blink|mood|ambient|sml).*");
+    /** High-volume lines with no value for this question. */
+    static final Pattern RECORD_SKIP = Pattern.compile(".*(getCANSTatus|getCANStatus|GetSpeedLimitForISLW|rearcamera|TIME_TICK|FrameCluster::updateTurn).*");
     private final Object lock = new Object();
     private byte[] latest;
     private long version;
@@ -29,6 +46,7 @@ public final class CarRelay {
         final CarRelay relay = new CarRelay();
         start(new Runnable() { public void run() { relay.readLog(); } }, "sml-log");
         start(new Runnable() { public void run() { relay.serve(); } }, "rfcomm");
+        start(new Runnable() { public void run() { record(); } }, "recorder");
         log("started " + RelayProtocol.HELLO);
         Looper.loop();
     }
@@ -64,6 +82,56 @@ public final class CarRelay {
             }
             sleep(2000);
         }
+    }
+
+    /** True when a "logcat -v time" line belongs in the overspeed recording. */
+    static boolean shouldRecord(String line) {
+        if (line == null || RECORD_SKIP.matcher(line).matches()) return false;
+        return RECORD_TAGS.matcher(line).matches() || RECORD_WORDS.matcher(line).matches();
+    }
+
+    private static void record() {
+        File dir = new File(RECORD_DIR);
+        while (true) {
+            Process process = null;
+            FileOutputStream out = null;
+            try {
+                // API 19 logcat has no -T: a restart re-records the current buffer once (harmless duplicates).
+                process = new ProcessBuilder("logcat", "-v", "time").redirectErrorStream(true).start();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
+                File file = new File(dir, "overspeed.log");
+                out = new FileOutputStream(file, true);
+                long size = file.length();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!shouldRecord(line)) continue;
+                    byte[] bytes = (line + "\n").getBytes("UTF-8");
+                    if (size + bytes.length > RECORD_FILE_BYTES) {
+                        out.close();
+                        rotate(dir);
+                        out = new FileOutputStream(file, false);
+                        size = 0;
+                    }
+                    out.write(bytes);
+                    size += bytes.length;
+                }
+                log("recorder logcat ended");
+            } catch (IOException error) {
+                log("recorder error " + error.getClass().getSimpleName());
+            } finally {
+                if (out != null) try { out.close(); } catch (IOException ignored) { }
+                if (process != null) process.destroy();
+            }
+            sleep(5000);
+        }
+    }
+
+    private static void rotate(File dir) {
+        new File(dir, "overspeed." + (RECORD_FILES - 1) + ".log").delete();
+        for (int i = RECORD_FILES - 2; i >= 1; i--) {
+            new File(dir, "overspeed." + i + ".log").renameTo(new File(dir, "overspeed." + (i + 1) + ".log"));
+        }
+        new File(dir, "overspeed.log").renameTo(new File(dir, "overspeed.1.log"));
     }
 
     private void publish(byte[] status) {

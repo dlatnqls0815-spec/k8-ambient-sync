@@ -122,7 +122,8 @@ public final class MainActivity extends Activity {
         slider(layout, "빨강 비율", Prefs.RED, 0, 100, 1, "%");
         slider(layout, "초록 비율", Prefs.GREEN, 0, 100, 1, "%");
         slider(layout, "파랑 비율", Prefs.BLUE, 0, 100, 1, "%");
-        slider(layout, "사제 최대 밝기(순정 최대일 때)", Prefs.MAX, 5, 50, 1, "%");
+        slider(layout, "Lotus 최대 밝기(순정 최대일 때)", Prefs.MAX, 5, 50, 1, "%");
+        slider(layout, "Zengge 최대 밝기(순정 최대일 때)", Prefs.ZENGGE_MAX, 5, 100, 1, "%");
 
         status = new TextView(this);
         status.setTextIsSelectable(true);

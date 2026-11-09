@@ -1,5 +1,15 @@
 # 진행 상황
 
+## 과속 경고 조사 시작·Zengge 밝기 분리 — 2026-11-09
+
+- 휴대폰 0.3.2: Zengge 최대 밝기 별도(기본 100%), Lotus는 기존 20%.
+- 과속 빨간불·깜빡임은 현재 중계로 연동 안 됨: 헤드유닛 SML 기능은 RGB/모드·밝기/상태 요청·응답 4개뿐.
+  내비는 계기판에 `NaviTbtTrapInfo`(overSpeedAlarm 필드 포함)를 보내며 경고 조명은 다른 경로로 추정.
+- 차량 중계 0.2.0(정차 speed 0 확인 후 무선 ADB `nemesis install --update`, 사용자 승인): 기존 중계 + 읽기 전용 기록기
+  (ClusterService·NavigationCluster·SystemService·MicomD·Navi·CoNA 태그와 speed/camera/alarm 등 단어, 16MB×6 회전,
+  `/data/nemesis/logs/k8ambient.relay/overspeed*.log`). relay.sh 작업 폴더 생성 재시도. 설치 후 휴대폰 자동 재연결 확인.
+- 다음: 사용자가 자연 발생한 과속 경고 시각을 알려 주면 기록을 받아 신호를 찾고 휴대폰 앱에 빨강 깜빡임을 추가.
+
 ## 0.3.1 Zengge 지원·자동 시작·테마 즉시 반영 — 2026-11-09
 
 - 원인: 시동 후 연동 안 됨 → 차량 중계는 정상, 휴대폰 중계 서비스가 꺼져 있었다. `AutoStartReceiver`로

@@ -31,9 +31,12 @@ final class Prefs {
 
     /** Tone/fade settings. Defaults: deeper colors (gamma 1.8), slightly less blue, 20 % max, 0.8 s fade. */
     static final String FADE_MS = "fadeMs", GAMMA = "gamma10", RED = "redGain", GREEN = "greenGain", BLUE = "blueGain", MAX = "maxBrightness";
+    /** Zengge maximum (lamp %), separate because the user's Zengge strip is calibrated at 100 %. */
+    static final String ZENGGE_MAX = "zenggeMaxBrightness";
 
     int get(String key) {
         if (FADE_MS.equals(key)) return prefs.getInt(key, 800);
+        if (ZENGGE_MAX.equals(key)) return prefs.getInt(key, 100);
         if (GAMMA.equals(key)) return prefs.getInt(key, 18);
         if (BLUE.equals(key)) return prefs.getInt(key, 85);
         if (MAX.equals(key)) return prefs.getInt(key, 20);
@@ -42,9 +45,10 @@ final class Prefs {
 
     void set(String key, int value) { prefs.edit().putInt(key, value).apply(); }
 
-    ColorTone tone() {
+    /** Shared color tone; the maximum brightness is per lamp type. */
+    ColorTone tone(boolean zengge) {
         return new ColorTone(clamp(get(GAMMA), 10, 30), clamp(get(RED), 0, 100), clamp(get(GREEN), 0, 100),
-                clamp(get(BLUE), 0, 100), clamp(get(MAX), 1, 100));
+                clamp(get(BLUE), 0, 100), clamp(get(zengge ? ZENGGE_MAX : MAX), 1, 100));
     }
 
     long fadeMs() { return clamp(get(FADE_MS), 0, 5000); }

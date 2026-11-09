@@ -56,8 +56,11 @@ public final class RelayService extends Service {
         long fadeMs;
         AmbientState lastMapped;
 
-        Lamp(String name, SyncEngine engine) {
+        final boolean zengge;
+
+        Lamp(String name, boolean zengge, SyncEngine engine) {
             this.engine = engine;
+            this.zengge = zengge;
             thread = new HandlerThread(name);
             thread.start();
             handler = new Handler(thread.getLooper());
@@ -81,7 +84,7 @@ public final class RelayService extends Service {
         final Runnable reloadTone = new Runnable() {
             public void run() {
                 Prefs prefs = new Prefs(RelayService.this);
-                tone = prefs.tone();
+                tone = prefs.tone(zengge);
                 fadeMs = prefs.fadeMs();
                 if (lastMapped != null) fader.target(tone.apply(lastMapped), SystemClock.elapsedRealtime(), 0);
             }
@@ -130,12 +133,12 @@ public final class RelayService extends Service {
         // ColorTone already scales brightness to the lamp maximum, so the engines pass it through.
         if (prefs.lamp() != null) {
             GattTransport lotus = GattTransport.lotus(this, adapter, prefs.lamp());
-            lamps.add(new Lamp("lotus-sync", prefs.power()
+            lamps.add(new Lamp("lotus-sync", false, prefs.power()
                     ? SyncEngine.forLotusWithStaticPower(lotus, 100) : SyncEngine.forObservedLotus(lotus, 100)));
         }
         if (prefs.zengge() != null) {
             GattTransport zengge = GattTransport.zengge(this, adapter, prefs.zengge());
-            lamps.add(new Lamp("zengge-sync",
+            lamps.add(new Lamp("zengge-sync", true,
                     SyncEngine.forScaledColor(zengge, new ZenggeFrames.Codec(prefs.zenggeOrder()), 100)));
         }
 
