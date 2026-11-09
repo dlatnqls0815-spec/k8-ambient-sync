@@ -208,6 +208,21 @@ public final class TestMain {
         rejects(new Action() { public void run() { RelayProtocol.decodeLine("SML 009b"); } });
         rejects(new Action() { public void run() { RelayProtocol.decodeLine("SML 009b002100ef0b010"); } });
         rejects(new Action() { public void run() { RelayProtocol.encodeStatus(new byte[8]); } });
+
+        String start = "D/LightService( 2060): action : com.mnsoft.navi.action.NaviCameraAlertState, mTempCameraAlertState : 1, "
+                + "mTempDelaySec : 1000,mPermanentCameraAlertState : -1LightsUtils.mDelayMsec: 1000";
+        String end = "D/LightService( 2060): action : com.mnsoft.navi.action.NaviCameraAlertState, mTempCameraAlertState : 0, "
+                + "mTempDelaySec : 3000,mPermanentCameraAlertState : -1LightsUtils.mDelayMsec: 3000";
+        check(Boolean.TRUE.equals(RelayProtocol.parseAlertLogLine(start)), "camera alert start");
+        check(Boolean.FALSE.equals(RelayProtocol.parseAlertLogLine(end)), "camera alert end");
+        check(RelayProtocol.parseAlertLogLine("E/LightService( 2060): mSMLIntentBraodcastReciever reciever actioncom.mnsoft.navi.action.NaviCameraAlertState") == null,
+                "receiver line without state ignored");
+        check(RelayProtocol.parseAlertLogLine(start.replace("State : 1,", "State : 12,")) == null, "other alert values ignored");
+        check(RelayProtocol.parseAlertLogLine(log) == null && RelayProtocol.parseAlertLogLine(null) == null, "unrelated lines");
+        check(Boolean.TRUE.equals(RelayProtocol.decodeAlert(RelayProtocol.encodeAlert(true) + "\r")), "alert on round trip");
+        check(Boolean.FALSE.equals(RelayProtocol.decodeAlert(RelayProtocol.encodeAlert(false))), "alert off round trip");
+        check(RelayProtocol.decodeAlert(line) == null, "status line is not an alert");
+        check(RelayProtocol.decodeLine(RelayProtocol.ALERT_ON) == null, "alert line is a valid non-status line");
     }
 
     private static void k8LotusMapping() {

@@ -8,7 +8,9 @@ import java.util.UUID;
  * parser for the OEM SystemService log line the car relay reads. Java 7, no Android classes.
  *
  * <p>Car to phone, one ASCII line each: {@code K8AMB 1} on connect, {@code SML <hex>} for a raw
- * SML status (at least 9 bytes), {@code PING} as keepalive. The phone never sends commands.
+ * SML status (at least 9 bytes), {@code ALERT 1}/{@code ALERT 0} when the navigation's speed camera
+ * alert starts/ends (the factory light then blinks red; the phone should switch without fading),
+ * {@code PING} as keepalive. The phone never sends commands. Older phones ignore ALERT lines.
  */
 public final class RelayProtocol {
     /** Fixed service UUID for the SDP record (random, project-specific). */
@@ -16,7 +18,9 @@ public final class RelayProtocol {
     public static final String HELLO = "K8AMB 1";
     public static final String PING = "PING";
     static final int MAX_STATUS_BYTES = 32;
+    public static final String ALERT_ON = "ALERT 1", ALERT_OFF = "ALERT 0";
     private static final String LOG_MARKER = "SYS_SML_STATUS_M_RESP:";
+    private static final String ALERT_ACTION = "NaviCameraAlertState", ALERT_FIELD = "mTempCameraAlertState :";
 
     private RelayProtocol() {}
 
@@ -32,7 +36,7 @@ public final class RelayProtocol {
     public static byte[] decodeLine(String line) {
         if (line == null) throw new IllegalArgumentException("Missing line");
         String text = line.trim();
-        if (HELLO.equals(text) || PING.equals(text)) return null;
+        if (HELLO.equals(text) || PING.equals(text) || ALERT_ON.equals(text) || ALERT_OFF.equals(text)) return null;
         if (!text.startsWith("SML ")) throw new IllegalArgumentException("Unknown relay line");
         String hex = text.substring(4);
         if (hex.length() % 2 != 0 || hex.length() < 18 || hex.length() > MAX_STATUS_BYTES * 2)
@@ -40,6 +44,35 @@ public final class RelayProtocol {
         byte[] out = new byte[hex.length() / 2];
         for (int i = 0; i < out.length; i++) out[i] = (byte) ((digit(hex.charAt(2 * i)) << 4) | digit(hex.charAt(2 * i + 1)));
         return out;
+    }
+
+    public static String encodeAlert(boolean active) {
+        return active ? ALERT_ON : ALERT_OFF;
+    }
+
+    /** TRUE/FALSE for an {@code ALERT} line, null for any other line. */
+    public static Boolean decodeAlert(String line) {
+        if (line == null) return null;
+        String text = line.trim();
+        if (ALERT_ON.equals(text)) return Boolean.TRUE;
+        if (ALERT_OFF.equals(text)) return Boolean.FALSE;
+        return null;
+    }
+
+    /**
+     * Reads the OEM LightService log line for the navigation camera alert, e.g.
+     * {@code D/LightService( 2060): action : com.mnsoft.navi.action.NaviCameraAlertState,
+     * mTempCameraAlertState : 1, mTempDelaySec : 1000, ...}. Returns TRUE for state 1, FALSE for 0,
+     * null for unrelated lines or other values (captured 2026-11-09, 80 ms before the red status).
+     */
+    public static Boolean parseAlertLogLine(String line) {
+        if (line == null || line.indexOf(ALERT_ACTION) < 0) return null;
+        int at = line.indexOf(ALERT_FIELD);
+        if (at < 0) return null;
+        String rest = line.substring(at + ALERT_FIELD.length()).trim();
+        if (rest.startsWith("1") && (rest.length() == 1 || !Character.isDigit(rest.charAt(1)))) return Boolean.TRUE;
+        if (rest.startsWith("0") && (rest.length() == 1 || !Character.isDigit(rest.charAt(1)))) return Boolean.FALSE;
+        return null;
     }
 
     /**

@@ -45,6 +45,9 @@ public final class RelayService extends Service {
     private volatile boolean stopping, reloadThemes;
     private volatile BluetoothSocket socket;
     private volatile long lastLineAt;
+    /** Fades are skipped until this time: during a navigation camera alert and briefly after it. */
+    private volatile long alertUntil;
+    private static final long ALERT_TAIL_MS = 1500;
 
     /** One lamp: its engine, fader and tone are owned by its own thread. */
     private final class Lamp {
@@ -94,7 +97,9 @@ public final class RelayService extends Service {
             handler.post(new Runnable() {
                 public void run() {
                     lastMapped = state;
-                    fader.target(tone.apply(state), SystemClock.elapsedRealtime(), fadeMs);
+                    long now = SystemClock.elapsedRealtime();
+                    // The factory alert blinks once a second; a fade would blur and delay it.
+                    fader.target(tone.apply(state), now, now < alertUntil ? 0 : fadeMs);
                 }
             });
         }
@@ -189,6 +194,12 @@ public final class RelayService extends Service {
                         mapping = new K8LotusMapping();
                         prefs.applyThemes(mapping);
                     }
+                    Boolean alert = RelayProtocol.decodeAlert(line);
+                    if (alert != null) {
+                        alertUntil = alert.booleanValue() ? Long.MAX_VALUE : SystemClock.elapsedRealtime() + ALERT_TAIL_MS;
+                        RelayStatus.target = RelayStatus.stamp(alert.booleanValue() ? "과속 카메라 경고 시작" : "과속 카메라 경고 끝");
+                        continue;
+                    }
                     byte[] raw;
                     try { raw = RelayProtocol.decodeLine(line); }
                     catch (IllegalArgumentException bad) { continue; }
@@ -203,6 +214,7 @@ public final class RelayService extends Service {
             } catch (IllegalArgumentException error) {
                 RelayStatus.car("차량 주소 오류");
             } finally {
+                alertUntil = 0;  // The car resends an active alert after reconnecting.
                 BluetoothSocket open = socket;
                 socket = null;
                 if (open != null) try { open.close(); } catch (IOException ignored) { }

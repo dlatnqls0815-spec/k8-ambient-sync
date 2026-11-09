@@ -40,6 +40,9 @@ public final class CarRelay {
     private final Object lock = new Object();
     private byte[] latest;
     private long version;
+    /** Navigation speed camera alert (factory light blinks red); forwarded so the phone skips fades. */
+    private boolean alert;
+    private long alertVersion;
 
     public static void main(String[] args) {
         Looper.prepareMainLooper();
@@ -66,13 +69,17 @@ public final class CarRelay {
         while (true) {
             Process process = null;
             try {
-                process = new ProcessBuilder("logcat", "-b", "system", "-v", "brief", "-s", "SystemService:D")
+                // LightService (vehicle settings app) logs the navigation camera alert in the main buffer.
+                process = new ProcessBuilder("logcat", "-b", "main", "-b", "system", "-v", "brief", "-s",
+                        "SystemService:D", "LightService:D")
                         .redirectErrorStream(true).start();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
                 String line;
                 while ((line = reader.readLine()) != null) {
                     byte[] status = RelayProtocol.parseLogLine(line);
                     if (status != null) publish(status);
+                    Boolean camera = RelayProtocol.parseAlertLogLine(line);
+                    if (camera != null) publishAlert(camera.booleanValue());
                 }
                 log("logcat ended");
             } catch (IOException error) {
@@ -144,6 +151,16 @@ public final class CarRelay {
         log("state " + RelayProtocol.encodeStatus(status));
     }
 
+    private void publishAlert(boolean active) {
+        synchronized (lock) {
+            if (alertVersion > 0 && alert == active) return;
+            alert = active;
+            alertVersion++;
+            lock.notifyAll();
+        }
+        log("alert " + (active ? 1 : 0));
+    }
+
     private void serve() {
         while (true) {
             BluetoothServerSocket server = null;
@@ -179,23 +196,33 @@ public final class CarRelay {
 
     private void stream(OutputStream output) throws IOException {
         write(output, RelayProtocol.HELLO);
-        long sent = -1;
+        long sent = -1, sentAlert = 0;
         while (true) {
             byte[] status;
-            long current;
+            long current, currentAlert;
+            boolean active;
             synchronized (lock) {
-                if (latest == null || version == sent) {
+                if ((latest == null || version == sent) && alertVersion == sentAlert) {
                     try { lock.wait(PING_MS); } catch (InterruptedException e) { throw new IOException("interrupted"); }
                 }
                 status = latest;
                 current = version;
+                active = alert;
+                currentAlert = alertVersion;
+            }
+            boolean wrote = false;
+            // The alert precedes the status it explains, so the phone already knows not to fade.
+            if (currentAlert != sentAlert) {
+                write(output, RelayProtocol.encodeAlert(active));
+                sentAlert = currentAlert;
+                wrote = true;
             }
             if (status != null && current != sent) {
                 write(output, RelayProtocol.encodeStatus(status));
                 sent = current;
-            } else {
-                write(output, RelayProtocol.PING);
+                wrote = true;
             }
+            if (!wrote) write(output, RelayProtocol.PING);
         }
     }
 
