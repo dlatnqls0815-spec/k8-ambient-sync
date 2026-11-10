@@ -552,6 +552,34 @@ public final class TestMain {
                 "immediate alert interrupts the ramp without restarting it later");
     }
 
+    private static void cameraWarningRecoveryFade() {
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forScaledColor(mock, new ZenggeFrames.Codec(ColorOrder.RGB), 100);
+        Fader fader = new Fader();
+        AmbientState normal = new AmbientState(0, 154, 158, 100, true);
+        AmbientState warning = new AmbientState(255, 0, 0, 100, true);
+        engine.setEnabled(true);
+        fader.target(normal, 0, 0);
+        engine.onState(fader.current(0));
+        engine.tick(0, 0);
+        fader.target(warning, 50, 0);
+        engine.onState(fader.current(50));
+        engine.tick(50, 0);
+        check(hex(mock.writes.get(1)).substring(16, 26).equals("4101ff0000"),
+                "warning red goes out immediately");
+
+        fader.target(normal, 100, 300);
+        engine.onState(fader.current(250));
+        engine.tick(250, 600);
+        check(hex(mock.writes.get(2)).substring(16, 26).equals("4101804d4f"),
+                "warning end blends red with the original color");
+        engine.onState(fader.current(400));
+        engine.tick(400, 600);
+        check(hex(mock.writes.get(3)).substring(16, 26).equals("4101009a9e"),
+                "warning recovery reaches the original color at the configured time");
+    }
+
     private static void deduplicationAndCoalescing() {
         MockTransport mock = new MockTransport();
         SyncEngine engine = new SyncEngine(mock, 100);
@@ -817,6 +845,7 @@ public final class TestMain {
         lotusStaticPower();
         lotusStartupFade();
         zenggeStartupFade();
+        cameraWarningRecoveryFade();
         userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();

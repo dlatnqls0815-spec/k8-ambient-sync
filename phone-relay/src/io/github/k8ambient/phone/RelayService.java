@@ -47,9 +47,6 @@ public final class RelayService extends Service {
     private volatile boolean stopping, reloadThemes;
     private volatile BluetoothSocket socket;
     private volatile long lastLineAt;
-    /** Fades are skipped until this time: during a navigation camera alert and briefly after it. */
-    private volatile long alertUntil;
-    private static final long ALERT_TAIL_MS = 1500;
 
     /** One lamp: its engine, fader and tone are owned by its own thread. */
     private final class Lamp {
@@ -60,6 +57,7 @@ public final class RelayService extends Service {
         ColorTone tone = ColorTone.NEUTRAL;
         long fadeMs;
         AmbientState lastMapped;
+        boolean cameraWarning;
 
         final boolean zengge;
 
@@ -80,7 +78,7 @@ public final class RelayService extends Service {
                 long now = SystemClock.elapsedRealtime();
                 AmbientState shown = fader.current(now);
                 if (shown != null) engine.onState(shown);
-                long startupFade = fadeMs == 0 || now < alertUntil ? 0 : STARTUP_FADE_MS;
+                long startupFade = fadeMs == 0 || cameraWarning ? 0 : STARTUP_FADE_MS;
                 try { engine.tick(now, startupFade); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
                 handler.postDelayed(this, TICK_MS);
             }
@@ -96,13 +94,16 @@ public final class RelayService extends Service {
             }
         };
 
-        void show(final AmbientState state) {
+        void show(final AmbientState state, final boolean warningFrame) {
             handler.post(new Runnable() {
                 public void run() {
+                    // The cached recovery state and the next SML response can have the same target.
+                    if (state.equals(lastMapped) && warningFrame == cameraWarning) return;
                     lastMapped = state;
+                    cameraWarning = warningFrame;
                     long now = SystemClock.elapsedRealtime();
                     // The factory alert blinks once a second; a fade would blur and delay it.
-                    fader.target(tone.apply(state), now, now < alertUntil ? 0 : fadeMs);
+                    fader.target(tone.apply(state), now, warningFrame ? 0 : fadeMs);
                 }
             });
         }
@@ -178,7 +179,6 @@ public final class RelayService extends Service {
         prefs.applyThemes(mapping);
         DriveModeLight driveLight = prefs.driveModeLight();
         int driveMode = 0;
-        SmlStatus lastStatus = null;
         long backoff = 3000;
         while (!stopping) {
             try {
@@ -192,6 +192,8 @@ public final class RelayService extends Service {
                 RelayStatus.car("연결됨");
                 backoff = 3000;
                 BufferedReader reader = new BufferedReader(new InputStreamReader(opened.getInputStream(), "US-ASCII"));
+                SmlStatus lastNormalStatus = null;
+                boolean warning = false;
                 String line;
                 while (!stopping && (line = reader.readLine()) != null) {
                     lastLineAt = SystemClock.elapsedRealtime();
@@ -200,28 +202,35 @@ public final class RelayService extends Service {
                         mapping = new K8LotusMapping();
                         prefs.applyThemes(mapping);
                         driveLight = prefs.driveModeLight();
-                        if (lastStatus != null) handleStatus(mapping, driveLight, driveMode, lastStatus);
+                        if (!warning && lastNormalStatus != null)
+                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
                     }
                     Integer mode = RelayProtocol.decodeDriveMode(line);
                     if (mode != null) {
                         driveMode = mode.intValue();
                         RelayStatus.driveMode = driveMode;
-                        // The status does not change with the drive mode, so re-apply the last one.
-                        if (lastStatus != null) handleStatus(mapping, driveLight, driveMode, lastStatus);
+                        if (!warning && lastNormalStatus != null)
+                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
                         continue;
                     }
                     Boolean alert = RelayProtocol.decodeAlert(line);
                     if (alert != null) {
-                        alertUntil = alert.booleanValue() ? Long.MAX_VALUE : SystemClock.elapsedRealtime() + ALERT_TAIL_MS;
-                        RelayStatus.target = RelayStatus.stamp(alert.booleanValue() ? "과속 카메라 경고 시작" : "과속 카메라 경고 끝");
+                        boolean ended = warning && !alert.booleanValue();
+                        warning = alert.booleanValue();
+                        RelayStatus.target = RelayStatus.stamp(warning ? "과속 카메라 경고 시작" : "과속 카메라 경고 끝");
+                        // Restore promptly even if the relay deduplicates the next normal SML.
+                        // If we joined mid-alert, wait for the first normal SML instead.
+                        if (ended && lastNormalStatus != null)
+                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
                         continue;
                     }
                     byte[] raw;
                     try { raw = RelayProtocol.decodeLine(line); }
                     catch (IllegalArgumentException bad) { continue; }
                     if (raw == null) continue;
-                    lastStatus = SmlStatus.parse(raw);
-                    handleStatus(mapping, driveLight, driveMode, lastStatus);
+                    SmlStatus status = SmlStatus.parse(raw);
+                    if (!warning) lastNormalStatus = status;
+                    handleStatus(mapping, driveLight, driveMode, status, warning);
                 }
                 RelayStatus.car("연결 끊김");
             } catch (IOException error) {
@@ -231,7 +240,6 @@ public final class RelayService extends Service {
             } catch (IllegalArgumentException error) {
                 RelayStatus.car("차량 주소 오류");
             } finally {
-                alertUntil = 0;  // The car resends an active alert after reconnecting.
                 BluetoothSocket open = socket;
                 socket = null;
                 if (open != null) try { open.close(); } catch (IOException ignored) { }
@@ -242,21 +250,21 @@ public final class RelayService extends Service {
         }
     }
 
-    private void handleStatus(K8LotusMapping mapping, DriveModeLight driveLight, int driveMode, SmlStatus status) {
+    private void handleStatus(K8LotusMapping mapping, DriveModeLight driveLight, int driveMode,
+                              SmlStatus status, boolean warning) {
         RelayStatus.raw = RelayStatus.stamp(RelayProtocol.encodeStatus(status.rawBytes()).substring(4));
         RelayStatus.themeKey = K8LotusMapping.isDirectColor(status) ? null : K8LotusMapping.themeKey(status);
         AmbientState mapped = mapping.map(status);
         RelayStatus.driveLinked = DriveModeLight.linked(status);
         // A camera alert (red blink) always wins over the drive mode color, as on the car.
-        final AmbientState state = mapped == null || SystemClock.elapsedRealtime() < alertUntil
-                ? mapped : driveLight.apply(mapped, status, driveMode);
+        AmbientState state = warning ? mapped : driveLight.apply(mapped, status, driveMode);
         if (state == null) {
             RelayStatus.target = RelayStatus.stamp("알 수 없는 밝기 " + status.brightnessRaw);
             return;
         }
         RelayStatus.target = RelayStatus.stamp((state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
                 + " RGB " + state.red + "," + state.green + "," + state.blue);
-        for (Lamp lamp : lamps) lamp.show(state);
+        for (Lamp lamp : lamps) lamp.show(state, warning);
     }
 
     private void startInForeground() {
