@@ -131,6 +131,8 @@ final class GattTransport implements SyncEngine.Transport {
                     synchronized (lock) { await(WRITE_MS, new Done() { public boolean done() { return descriptorDone; } }); }
                 }
             }
+            // Shortest connection interval, so each color write leaves within a few milliseconds.
+            opened.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
             characteristic = found;
             ready = true;
             RelayStatus.lamp(slot, "준비됨");

@@ -35,6 +35,64 @@ public final class RelayProtocol {
         return line.toString();
     }
 
+    private static final String RGB_COMMAND = "[SystemService.setSMLRGB] red:";
+    private static final String CONFIG_COMMAND = "[SystemService.setSMLConfiguration] mode:";
+
+    /**
+     * Predicts the next SML status from the head unit's own command log line, which appears about
+     * 0.3 s before the matching {@code SYS_SML_STATUS_M_RESP} (captured 2026-11-09):
+     * <pre>
+     * [SystemService.setSMLRGB] red: 0x00 0xc1 , green: 0x00 0x21 , blue: 0x00 0xe0 , called by 2060
+     * [SystemService.setSMLConfiguration] mode: 5, data: 9, called by 2060
+     * </pre>
+     * RGB replaces bytes 0..5. Configuration mode 5 sets byte 6 (brightness raw), mode 8 byte 7
+     * (dimmed while driving) and mode 9 byte 8 (drive mode link), as seen in the captured pairs.
+     * Returns a new array, or null when the line is not such a command, the mode is another one, a
+     * value is out of range, or there is no current status to change. The real response still
+     * follows and corrects any wrong prediction.
+     */
+    public static byte[] predictStatus(byte[] current, String line) {
+        if (current == null || current.length < 9 || line == null) return null;
+        int at = line.indexOf(RGB_COMMAND);
+        if (at >= 0) {
+            String[] parts = line.substring(at + RGB_COMMAND.length()).split(",");
+            if (parts.length < 3) return null;
+            byte[] out = current.clone();
+            for (int channel = 0; channel < 3; channel++) {
+                String part = parts[channel];
+                int colon = part.indexOf(':');
+                String[] bytes = (colon < 0 ? part : part.substring(colon + 1)).trim().split("\\s+");
+                if (bytes.length != 2) return null;
+                for (int i = 0; i < 2; i++) {
+                    if (bytes[i].length() != 4 || !bytes[i].startsWith("0x")) return null;
+                    try {
+                        out[channel * 2 + i] = (byte) ((digit(bytes[i].charAt(2)) << 4) | digit(bytes[i].charAt(3)));
+                    } catch (IllegalArgumentException bad) {
+                        return null;
+                    }
+                }
+            }
+            return out;
+        }
+        at = line.indexOf(CONFIG_COMMAND);
+        if (at < 0) return null;
+        String[] parts = line.substring(at + CONFIG_COMMAND.length()).split(",");
+        if (parts.length < 2 || !parts[1].trim().startsWith("data:")) return null;
+        int mode, data;
+        try {
+            mode = Integer.parseInt(parts[0].trim());
+            data = Integer.parseInt(parts[1].trim().substring(5).trim());
+        } catch (NumberFormatException bad) {
+            return null;
+        }
+        if (data < 0 || data > 255) return null;
+        int index = mode == 5 ? 6 : mode == 8 ? 7 : mode == 9 ? 8 : -1;
+        if (index < 0) return null;
+        byte[] out = current.clone();
+        out[index] = (byte) data;
+        return out;
+    }
+
     /** Returns the status bytes of an {@code SML} line, or null for any other valid line. */
     public static byte[] decodeLine(String line) {
         if (line == null) throw new IllegalArgumentException("Missing line");
@@ -50,6 +108,31 @@ public final class RelayProtocol {
         return out;
     }
 
+    /**
+     * 0x00 follows every change and 0x0f is what the car reports at ignition (captured 2026-11-10,
+     * 11 s after boot, while the car itself was back in ECO): neither names a drive mode.
+     */
+    private static Integer realMode(int mode) {
+        return mode == 0 || mode == 0x0f ? null : Integer.valueOf(mode);
+    }
+
+    private static final String IGNITION_MARKER = "SYS_IGN_STATUS_M:";
+
+    /**
+     * Ignition from {@code D/SystemService( 691): SYS_IGN_STATUS_M: 0} (off) / {@code 1} (on).
+     * The head unit can stay on through a short ignition cycle (captured 2026-11-10: 18:10:34 off,
+     * 18:10:38 on), and the car returns to ECO at every ignition without logging a mode line.
+     */
+    public static Boolean parseIgnitionLogLine(String line) {
+        if (line == null) return null;
+        int at = line.indexOf(IGNITION_MARKER);
+        if (at < 0) return null;
+        String value = line.substring(at + IGNITION_MARKER.length()).trim();
+        if ("1".equals(value)) return Boolean.TRUE;
+        if ("0".equals(value)) return Boolean.FALSE;
+        return null;
+    }
+
     public static String encodeDriveMode(int mode) {
         if (mode < 1 || mode > 255) throw new IllegalArgumentException("Drive mode must be 1..255");
         return MODE_PREFIX + String.format(Locale.US, "%02x", mode);
@@ -62,7 +145,7 @@ public final class RelayProtocol {
         if (!text.startsWith(MODE_PREFIX) || text.length() != MODE_PREFIX.length() + 2) return null;
         try {
             int mode = (digit(text.charAt(5)) << 4) | digit(text.charAt(6));
-            return mode == 0 ? null : Integer.valueOf(mode);
+            return realMode(mode);
         } catch (IllegalArgumentException bad) {
             return null;
         }
@@ -80,7 +163,7 @@ public final class RelayProtocol {
         if (parts.length < 3 || parts[2].length() != 4 || !parts[2].startsWith("0x")) return null;
         try {
             int mode = (digit(parts[2].charAt(2)) << 4) | digit(parts[2].charAt(3));
-            return mode == 0 ? null : Integer.valueOf(mode);
+            return realMode(mode);
         } catch (IllegalArgumentException bad) {
             return null;
         }

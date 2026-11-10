@@ -16,6 +16,12 @@ final class Prefs {
 
     Prefs(Context context) {
         prefs = context.getApplicationContext().getSharedPreferences(NAME, Context.MODE_PRIVATE);
+        // One-time: the user asked for a faster response, so a saved slower fade drops to the new default.
+        if (!prefs.getBoolean("fastFade", false)) {
+            SharedPreferences.Editor editor = prefs.edit().putBoolean("fastFade", true);
+            if (prefs.getInt(FADE_MS, DEFAULT_FADE_MS) > DEFAULT_FADE_MS) editor.putInt(FADE_MS, DEFAULT_FADE_MS);
+            editor.apply();
+        }
     }
 
     String car() { return prefs.getString(CAR, null); }
@@ -30,13 +36,15 @@ final class Prefs {
     boolean anyLamp() { return lamp() != null || zengge() != null; }
     boolean power() { return prefs.getBoolean(POWER, false); }
 
-    /** Tone/fade settings. Defaults: deeper colors (gamma 1.8), slightly less blue, 20 % max, 0.8 s fade. */
+    /** Tone/fade settings. Defaults: deeper colors (gamma 1.8), slightly less blue, 20 % max, 0.3 s fade (0.8 s until 0.4.1). */
     static final String FADE_MS = "fadeMs", GAMMA = "gamma10", RED = "redGain", GREEN = "greenGain", BLUE = "blueGain", MAX = "maxBrightness";
     /** Zengge maximum (lamp %), separate because the user's Zengge strip is calibrated at 100 %. */
     static final String ZENGGE_MAX = "zenggeMaxBrightness";
 
+    static final int DEFAULT_FADE_MS = 300;
+
     int get(String key) {
-        if (FADE_MS.equals(key)) return prefs.getInt(key, 800);
+        if (FADE_MS.equals(key)) return prefs.getInt(key, DEFAULT_FADE_MS);
         if (ZENGGE_MAX.equals(key)) return prefs.getInt(key, 100);
         if (GAMMA.equals(key)) return prefs.getInt(key, 18);
         if (BLUE.equals(key)) return prefs.getInt(key, 85);

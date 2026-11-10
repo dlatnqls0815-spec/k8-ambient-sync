@@ -236,7 +236,72 @@ public final class TestMain {
         check(RelayProtocol.decodeDriveMode("MODE 00") == null && RelayProtocol.decodeDriveMode("MODE 0g") == null
                 && RelayProtocol.decodeDriveMode("MODE 123") == null, "bad mode lines");
         check(RelayProtocol.decodeLine("MODE 03") == null, "mode line is a valid non-status line");
+        check(RelayProtocol.parseDriveModeLogLine(modeLog.replace("0x01 0x03", "0x01 0x0f")) == null, "ignition value 0x0f is not a mode");
+        check(RelayProtocol.decodeDriveMode("MODE 0f") == null, "MODE 0f from an older relay is ignored");
+        check(Boolean.TRUE.equals(RelayProtocol.parseIgnitionLogLine("D/SystemService(  691): SYS_IGN_STATUS_M: 1")), "ignition on");
+        check(Boolean.FALSE.equals(RelayProtocol.parseIgnitionLogLine("D/SystemService(  691): SYS_IGN_STATUS_M: 0 ")), "ignition off");
+        check(RelayProtocol.parseIgnitionLogLine("V/SystemService(  691): [RCV] FUNC : [SYS_IGN_STATUS_M(0x810a)]") == null,
+                "function name line is not a value");
+        check(RelayProtocol.parseIgnitionLogLine("D/SystemService(  691): SYS_IGN_STATUS_M: 2") == null
+                && RelayProtocol.parseIgnitionLogLine(null) == null, "other ignition values ignored");
         rejects(new Action() { public void run() { RelayProtocol.encodeDriveMode(0); } });
+    }
+
+    private static void telemetryProtocol() {
+        check(Integer.valueOf(42).equals(TelemetryProtocol.parseSpeedLogLine("11-09 17:21:00.160 D/SystemService(  693): SYS_SPEED_M: 42")), "speed log");
+        check(Integer.valueOf(0).equals(TelemetryProtocol.parseSpeedLogLine("D/SystemService(  693): SYS_SPEED_M: 0\r")), "speed zero");
+        check(TelemetryProtocol.parseSpeedLogLine("V/SystemService(  693): [RCV] FUNC : [SYS_SPEED_M(0x8131)]") == null, "speed func header ignored");
+        check(TelemetryProtocol.parseSpeedLogLine("SYS_SPEED_REG_TYPE_B_M_RESP: 0x00") == null
+                && TelemetryProtocol.parseSpeedLogLine("SYS_SPEED_M: 999") == null
+                && TelemetryProtocol.parseSpeedLogLine("SYS_SPEED_M: -3") == null
+                && TelemetryProtocol.parseSpeedLogLine(null) == null, "bad speed lines");
+        check(Boolean.TRUE.equals(TelemetryProtocol.parseParkLogLine("D/SystemService(  693): SYS_GEAR_STATUS_M: 0")), "P");
+        check(Boolean.FALSE.equals(TelemetryProtocol.parseParkLogLine("D/SystemService(  693): SYS_GEAR_STATUS_M: 1")), "not P");
+        check(TelemetryProtocol.parseParkLogLine("V/SystemService(  693): [RCV] FUNC : [SYS_GEAR_STATUS_M(0x8126)]") == null, "gear header ignored");
+        check(Boolean.TRUE.equals(TelemetryProtocol.parseReverseLogLine("V/SystemService(  693): Reverse status changed to : true")), "reverse on");
+        check(Boolean.FALSE.equals(TelemetryProtocol.parseReverseLogLine("V/SystemService(  693): Reverse status changed to : false")), "reverse off");
+        check(TelemetryProtocol.parseReverseLogLine("D/SystemService(  693): onReverseStatus before :x") == null, "reverse other");
+        TelemetryProtocol.Snapshot empty = TelemetryProtocol.Snapshot.empty();
+        check("TEL -1 -1 -1 -1".equals(TelemetryProtocol.encode(empty)), "empty encode");
+        TelemetryProtocol.Snapshot s = empty.withSpeed(57).withPark(false).withReverse(false).withMode(3);
+        check("TEL 57 0 0 3".equals(TelemetryProtocol.encode(s)), "encode");
+        check(s.equals(TelemetryProtocol.decode(" TEL 57 0 0 3\r")) && s.hashCode() == TelemetryProtocol.decode("TEL 57 0 0 3").hashCode(), "round trip");
+        check(!s.equals(s.withPark(true)), "park changes snapshot");
+        check(TelemetryProtocol.decode(TelemetryProtocol.HELLO) == null && TelemetryProtocol.decode("PING") == null
+                && TelemetryProtocol.decode("TEL 57 0 0") == null && TelemetryProtocol.decode("TEL 57 2 0 3") == null
+                && TelemetryProtocol.decode("TEL 400 0 0 3") == null && TelemetryProtocol.decode("TEL 5 0 0 0") == null
+                && TelemetryProtocol.decode("TEL x 0 0 3") == null && TelemetryProtocol.decode(null) == null, "bad TEL lines");
+        check(!TelemetryProtocol.SERVICE_UUID.equals(RelayProtocol.SERVICE_UUID), "separate channel");
+        rejects(new Action() { public void run() { new TelemetryProtocol.Snapshot(-2, 0, 0, 3); } });
+    }
+
+    private static void predictedStatus() {
+        // Captured command lines and the status responses that followed about 0.3 s later.
+        byte[] before = RelayProtocol.decodeLine("SML 00fa000400510b0101");
+        byte[] rgb = RelayProtocol.predictStatus(before,
+                "D/SystemService(  693): [SystemService.setSMLRGB] red: 0x00 0xc1 , green: 0x00 0x21 , blue: 0x00 0xe0 , called by 2060");
+        check("SML 00c1002100e00b0101".equals(RelayProtocol.encodeStatus(rgb)), "RGB command predicts the response");
+        check("SML 00fa000400510b0101".equals(RelayProtocol.encodeStatus(before)), "prediction does not modify its input");
+        byte[] theme = RelayProtocol.predictStatus(rgb,
+                "D/SystemService(  693): [SystemService.setSMLRGB] red: 0x01 0xd9 , green: 0x01 0xae , blue: 0x01 0x5f , called by 2060");
+        check("SML 01d901ae015f0b0101".equals(RelayProtocol.encodeStatus(theme)), "theme command keeps its high bytes");
+        byte[] level = RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLConfiguration] mode: 5, data: 7, called by 2060");
+        check("SML 00c1002100e0070101".equals(RelayProtocol.encodeStatus(level)), "mode 5 sets brightness raw");
+        byte[] dim = RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLConfiguration] mode: 8, data: 2, called by 2060");
+        check("SML 00c1002100e00b0201".equals(RelayProtocol.encodeStatus(dim)), "mode 8 sets the dim byte");
+        byte[] link = RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLConfiguration] mode: 9, data: 2, called by 2060");
+        check("SML 00c1002100e00b0102".equals(RelayProtocol.encodeStatus(link)), "mode 9 sets the drive mode link");
+        check(RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLConfiguration] mode: 3, data: 2, called by 2060") == null,
+                "unknown configuration modes are not predicted");
+        check(RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLConfiguration] mode: 5, data: 300, called by 2060") == null,
+                "out-of-range data ignored");
+        check(RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLRGB] red: 0x00 0xzz , green: 0x00 0x21 , blue: 0x00 0xe0") == null,
+                "bad hex ignored");
+        check(RelayProtocol.predictStatus(rgb, "D/SystemService(  693): [SystemService.setSMLRGB] red: 0x00 , green: 0x00 0x21 , blue: 0x00 0xe0") == null,
+                "short channel ignored");
+        check(RelayProtocol.predictStatus(null, "D/SystemService(  693): [SystemService.setSMLConfiguration] mode: 5, data: 7") == null
+                && RelayProtocol.predictStatus(rgb, null) == null
+                && RelayProtocol.predictStatus(rgb, "D/SystemService(  693): SYS_SPEED_M: 8") == null, "no status or unrelated line");
     }
 
     private static void driveModeLight() {
@@ -658,11 +723,13 @@ public final class TestMain {
         k8ProvisionalBrightness();
         k8CapturedStatusesUnderOffLadderCandidate();
         relayProtocol();
+        telemetryProtocol();
         k8LotusMapping();
         colorTone();
         fader();
         zengge();
         driveModeLight();
+        predictedStatus();
         observedLotusReplay();
         lotusStaticPower();
         userBrightnessCalibration();
