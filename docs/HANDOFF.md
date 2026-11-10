@@ -16,11 +16,10 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 | 위치 | 버전 | 산출물 |
 |---|---|---|
 | 차량 NEMESIS `k8ambient.relay` | **0.3.5** | `private/nemesis-relay/k8ambient.relay-0.3.5.zip` |
-| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold), 마지막 설치 확인 | **0.4.1** (code 10) | `../../deliverables/k8-ambient-phone-relay-0.4.1.apk` |
+| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.4** (code 13), 2026-11-10 USB로 설치·서비스 재시작 확인 | `../../deliverables/k8-ambient-phone-relay-0.4.4.apk` |
 
-**최신 배포용 휴대폰 APK는 0.4.4 (code 13)**, `../../deliverables/k8-ambient-phone-relay-0.4.4.apk`.
-시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
-빌드·서명 확인 완료. 사용자가 0.4.4를 설치했는지와 해당 버전의 실차 반응은 미확인이다.
+0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
+0.4.2~0.4.4 기능의 실차 반응은 아직 미확인이다(0.4.1까지의 기능은 실차 확인됨).
 
 사용자가 확인한 동작: 색·밝기·테마 추종, 꺼짐(Lotus 전원 프레임 옵션), 부드러운 전환·톤, Zengge 색(빨강·초록 순서 보정),
 Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠·에코·스마트), 시동 껐다 켜면 에코 색 유지, 시동 시 앱 자동 시작.
