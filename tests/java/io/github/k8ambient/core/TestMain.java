@@ -325,6 +325,30 @@ public final class TestMain {
         rejects(new Action() { public void run() { new DriveModeLight().setColor(DriveModeLight.ECO, 256, 2, 3); } });
     }
 
+    private static void directColorDriveModeReplay() {
+        K8LotusMapping mapping = new K8LotusMapping();
+        DriveModeLight light = new DriveModeLight();
+        light.setColor(DriveModeLight.SPORT, 255, 0, 0);
+        light.setColor(DriveModeLight.ECO, 50, 154, 158);
+
+        // Synthetic sequence: choose a direct color while link is already on, then switch modes
+        // without another SML response. This does not assume what the vehicle reports in the field.
+        byte[] theme = RelayProtocol.decodeLine("SML 016b015a0195060102");
+        byte[] predicted = RelayProtocol.predictStatus(theme,
+                "[SystemService.setSMLRGB] red: 0x00 0x91 , green: 0x00 0x24 , blue: 0x00 0xcf");
+        SmlStatus direct = SmlStatus.parse(RelayProtocol.decodeLine(RelayProtocol.encodeStatus(predicted)));
+        AmbientState user = mapping.map(direct);
+        check(new AmbientState(255, 0, 0, 50, true).equals(
+                light.apply(user, direct, RelayProtocol.decodeDriveMode("MODE 03"))),
+                "direct color selection preserves SPORT override");
+        check(new AmbientState(50, 154, 158, 50, true).equals(
+                light.apply(user, direct, RelayProtocol.decodeDriveMode("MODE 02"))),
+                "ECO overrides cached direct color without a new SML response");
+        check(new AmbientState(0x91, 0x24, 0xcf, 50, true).equals(
+                light.apply(user, direct, RelayProtocol.decodeDriveMode("MODE 06"))),
+                "SMART restores the selected direct color");
+    }
+
     private static void k8LotusMapping() {
         K8LotusMapping mapping = new K8LotusMapping();
         SmlStatus customMax = SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 11, 1, 1});
@@ -729,6 +753,7 @@ public final class TestMain {
         fader();
         zengge();
         driveModeLight();
+        directColorDriveModeReplay();
         predictedStatus();
         observedLotusReplay();
         lotusStaticPower();
