@@ -494,6 +494,64 @@ public final class TestMain {
         check(Arrays.equals(mock.writes.get(8), on), "reconnect restores power state first");
     }
 
+    private static void lotusStartupFade() {
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forLotusWithStaticPower(mock);
+        engine.setEnabled(true);
+        engine.onState(new AmbientState(200, 100, 60, 100, true));
+        engine.tick(0, 600);
+        // Simulate a slow BLE setup/write: elapsed time before initialization must not count.
+        engine.tick(5000, 600);
+        engine.tick(5050, 600);
+        check(mock.writes.size() == 3
+                && Arrays.equals(mock.writes.get(0), LotusE1Frames.color(0, 0, 0))
+                && Arrays.equals(mock.writes.get(1), LotusE1Frames.brightness(20))
+                && Arrays.equals(mock.writes.get(2), LotusE1Frames.power(true)),
+                "Lotus loads black and calibrated brightness before ON");
+        engine.tick(5100, 600);
+        engine.tick(5400, 600);
+        engine.tick(5700, 600);
+        check(mock.writes.size() == 5
+                && Arrays.equals(mock.writes.get(3), LotusE1Frames.color(100, 50, 30))
+                && Arrays.equals(mock.writes.get(4), LotusE1Frames.color(200, 100, 60)),
+                "Lotus ramps from black to full target after setup");
+        mock.connected = false;
+        engine.tick(5750, 600);
+        check(Arrays.equals(mock.writes.get(5), LotusE1Frames.color(0, 0, 0)),
+                "Lotus reconnect starts at black again");
+    }
+
+    private static void zenggeStartupFade() {
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forScaledColor(mock, new ZenggeFrames.Codec(ColorOrder.RGB), 100);
+        engine.setEnabled(true);
+        engine.onState(new AmbientState(200, 100, 60, 50, true));
+        engine.tick(0, 600);
+        engine.tick(50, 600);
+        engine.tick(350, 600);
+        engine.tick(650, 600);
+        check(mock.writes.size() == 3
+                && hex(mock.writes.get(0)).substring(16, 26).equals("4101000000")
+                && hex(mock.writes.get(1)).substring(16, 26).equals("410132190f")
+                && hex(mock.writes.get(2)).substring(16, 26).equals("410164321e"),
+                "Zengge fades with the calibrated brightness applied");
+        engine.onState(new AmbientState(200, 100, 60, 0, false));
+        engine.tick(700, 600);
+        check(hex(mock.writes.get(3)).substring(16, 26).equals("4101000000"), "OFF remains immediate");
+        engine.onState(new AmbientState(200, 100, 60, 50, true));
+        engine.tick(750, 600);
+        engine.tick(800, 600);
+        check(mock.writes.size() == 5 && hex(mock.writes.get(4)).substring(16, 26).equals("4101090403"),
+                "OFF to ON on the same BLE connection restarts the ramp");
+        engine.onState(new AmbientState(255, 0, 0, 100, true));
+        engine.tick(850, 0);
+        engine.tick(900, 600);
+        check(mock.writes.size() == 6 && hex(mock.writes.get(5)).substring(16, 26).equals("4101ff0000"),
+                "immediate alert interrupts the ramp without restarting it later");
+    }
+
     private static void deduplicationAndCoalescing() {
         MockTransport mock = new MockTransport();
         SyncEngine engine = new SyncEngine(mock, 100);
@@ -757,6 +815,8 @@ public final class TestMain {
         predictedStatus();
         observedLotusReplay();
         lotusStaticPower();
+        lotusStartupFade();
+        zenggeStartupFade();
         userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();

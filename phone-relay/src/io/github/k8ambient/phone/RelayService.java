@@ -39,6 +39,7 @@ public final class RelayService extends Service {
     static final String ACTION_RELOAD_THEMES = "io.github.k8ambient.phone.RELOAD_THEMES";
     private static final String CHANNEL = "relay";
     private static final long TICK_MS = 25, LINK_TIMEOUT_MS = 30000;
+    private static final long STARTUP_FADE_MS = 600;
 
     private final List<Lamp> lamps = new CopyOnWriteArrayList<Lamp>();
     private boolean started;
@@ -79,7 +80,8 @@ public final class RelayService extends Service {
                 long now = SystemClock.elapsedRealtime();
                 AmbientState shown = fader.current(now);
                 if (shown != null) engine.onState(shown);
-                try { engine.tick(now); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
+                long startupFade = fadeMs == 0 || now < alertUntil ? 0 : STARTUP_FADE_MS;
+                try { engine.tick(now, startupFade); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
                 handler.postDelayed(this, TICK_MS);
             }
         };

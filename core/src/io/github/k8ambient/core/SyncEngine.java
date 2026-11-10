@@ -30,6 +30,8 @@ public final class SyncEngine {
     private int sentRed = -1, sentGreen = -1, sentBlue = -1, sentBrightness = -1;
     private long lastTick = -1, lastAttempt = -1, retryAt, retryDelay = 100;
     private long successfulWrites, connectionAttempts, failures;
+    private long startupAt = -1;
+    private boolean startupComplete;
 
     public SyncEngine(Transport transport) {
         this(transport, 20);
@@ -112,8 +114,14 @@ public final class SyncEngine {
     public long getFailures() { return failures; }
 
     public void tick(long monotonicMillis) {
+        tick(monotonicMillis, 0);
+    }
+
+    /** Optionally ramp the first visible output after OFF or a new lamp connection. */
+    public void tick(long monotonicMillis, long startupFadeMillis) {
         if (monotonicMillis < 0 || monotonicMillis < lastTick)
             throw new IllegalArgumentException("Clock must be monotonic");
+        if (startupFadeMillis < 0) throw new IllegalArgumentException("Duration must not be negative");
         lastTick = monotonicMillis;
         if (!enabled || desired == null || monotonicMillis < retryAt) return;
         if (observedLotus && !lotusPower && !desired.on) {
@@ -142,6 +150,15 @@ public final class SyncEngine {
         AmbientState target = desired;
         // The input must already be normalized; this is not a K8 raw-value conversion.
         int targetBrightness = (target.brightness * maximumBrightness + 50) / 100;
+        if (!target.on) {
+            resetStartup();
+        } else if (startupFadeMillis == 0) {
+            // Alerts and the immediate setting can interrupt a start without restarting it later.
+            startupComplete = true;
+        } else if (!startupComplete) {
+            target = rampStartup(target, targetBrightness, monotonicMillis, startupFadeMillis);
+        }
+
         if (codec != null) {
             int red = target.on ? scale(target.red, targetBrightness) : 0;
             int green = target.on ? scale(target.green, targetBrightness) : 0;
@@ -162,9 +179,13 @@ public final class SyncEngine {
             return;
         }
         boolean colorPending = sentRed != target.red || sentGreen != target.green || sentBlue != target.blue;
+        // Preload black and brightness before Lotus ON so it cannot reveal the previous color.
+        boolean prepareLotus = lotusPower && target.on && !startupComplete && startupAt < 0
+                && (colorPending || sentBrightness != targetBrightness);
         byte[] packet;
         int field;
-        if ((!observedLotus || lotusPower) && (sentOn == null || sentOn.booleanValue() != target.on)) {
+        if (!prepareLotus && (!observedLotus || lotusPower)
+                && (sentOn == null || sentOn.booleanValue() != target.on)) {
             packet = observedLotus ? LotusE1Frames.power(target.on) : WporterE1Candidate.power(target.on);
             field = 0;
         } else if (!target.on) {
@@ -214,7 +235,31 @@ public final class SyncEngine {
         return (channel * percent + 50) / 100;
     }
 
+    private AmbientState rampStartup(AmbientState target, int brightness, long now, long duration) {
+        // Start the clock after the dark frame has been sent, even if BLE connection took seconds.
+        if (startupAt < 0 && sentRed == 0 && sentGreen == 0 && sentBlue == 0
+                && (!observedLotus || sentBrightness == brightness)
+                && (!lotusPower || Boolean.TRUE.equals(sentOn))) {
+            startupAt = now;
+        }
+        long elapsed = startupAt < 0 ? 0 : now - startupAt;
+        if (elapsed >= duration) {
+            startupComplete = true;
+            return target;
+        }
+        // Ramp RGB so Lotus can keep its calibrated brightness without depending on brightness 0.
+        double level = (double) elapsed / duration;
+        return new AmbientState((int) Math.round(target.red * level), (int) Math.round(target.green * level),
+                (int) Math.round(target.blue * level), target.brightness, true);
+    }
+
+    private void resetStartup() {
+        startupAt = -1;
+        startupComplete = false;
+    }
+
     private void forgetSent() {
+        resetStartup();
         sentOn = null;
         lastDataWasColor = false;
         sentRed = sentGreen = sentBlue = sentBrightness = -1;
