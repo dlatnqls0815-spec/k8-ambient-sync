@@ -3,7 +3,7 @@
 기준: **2026-11-10**, 브랜치 `codex/device-evidence`(원격 `dlatnqls0815-spec/k8-ambient-sync`, main 병합·강제 Push 금지).
 이 문서를 먼저 읽고 `AGENTS.md` → `docs/PROGRESS.md`(위쪽이 최신) → `docs/DECISIONS.md` 순으로 본다.
 `NEXT_PARKED_VISIT.md`, 예전 `CLAUDE_HANDOFF.md` 내용, PROGRESS 아래쪽은 **지난 기록**이다(A안 GATT 시험 등은 이미 끝남).
-작업 전 `git fetch` / `git pull` 필수(다른 세션이 같은 브랜치에 Push할 수 있다).
+Codex와 Claude 모두 이 프로젝트 폴더에서 작업한다. 동기화와 세션 교대 절차는 [AGENTS.md](../AGENTS.md)를 따른다.
 
 ## 한 줄 요약
 
@@ -16,10 +16,14 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 | 위치 | 버전 | 산출물 |
 |---|---|---|
 | 차량 NEMESIS `k8ambient.relay` | **0.3.5** | `private/nemesis-relay/k8ambient.relay-0.3.5.zip` |
-| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.1** (code 10) | `../../deliverables/k8-ambient-phone-relay-0.4.1.apk` |
+| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold), 마지막 설치 확인 | **0.4.1** (code 10) | `../../deliverables/k8-ambient-phone-relay-0.4.1.apk` |
+
+**최신 배포용 휴대폰 APK는 0.4.4 (code 13)**, `../../deliverables/k8-ambient-phone-relay-0.4.4.apk`.
+시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
+빌드·서명 확인 완료. 사용자가 0.4.4를 설치했는지와 해당 버전의 실차 반응은 미확인이다.
 
 사용자가 확인한 동작: 색·밝기·테마 추종, 꺼짐(Lotus 전원 프레임 옵션), 부드러운 전환·톤, Zengge 색(빨강·초록 순서 보정),
-과속 카메라 빨강 깜빡임(지연 단축), 드라이브 모드 연동(스포츠·에코·스마트), 시동 껐다 켜면 에코 색 유지, 시동 시 앱 자동 시작.
+Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠·에코·스마트), 시동 껐다 켜면 에코 색 유지, 시동 시 앱 자동 시작.
 
 ## 동작 구조와 근거
 
@@ -40,25 +44,28 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 **휴대폰 앱 `phone-relay/`** (Android 13+, Gradle 없이 `tools/build_phone_relay.py`)
 - 조명마다 스레드·`Fader`·`SyncEngine`. Lotus: FFF0/FFF3, 색 `7e 07 05 03 RR GG BB 10 ef`, 밝기 `7e 04 01 lv 01 ff 02 01 ef`, 전원 ON/OFF 프레임.
   Zengge(제품 0xA3, BLE v5): FFFF/FF01, 8바이트 헤더 + `41 01 R G B 00 00 00 01 00 00 f0 chk`, 밝기는 RGB에 곱함, 꺼짐=검정, 기본 색 순서 GRB.
-- `ColorTone`(감마 1.8, 파랑 85%), 최대 밝기 Lotus 20%·Zengge 100%, 전환 기본 300ms(경고 중엔 0), BLE 연결 우선순위 HIGH.
+- `ColorTone`(감마 1.8, 파랑 85%), 최대 밝기 Lotus 20%·Zengge 100%, 전환 기본 300ms, BLE 연결 우선순위 HIGH.
+  0.4.4에서는 Zengge 평소 색과 경고 펄스를 바로 전송한다. 첫 점등 약 600ms와 경고 종료 후 색 복귀 페이드는 적용한다.
 - `DriveModeLight`: 연동이 켜졌을 때만 에코 (50,154,158)·스포츠 (255,0,0), 스마트는 사용자 색. 과속 경고가 우선.
 - `AutoStartReceiver`: 차량 ACL 연결·부팅·업데이트 때 자동 시작("중계 시작"을 눌러 둔 경우만, 배터리 "제한 없음" 상태).
 
 ## 남은 일 (우선순위 순)
 
-1. **직접 고른 색 + 연동 켜짐에서 모드 전환이 안 바뀐다는 사용자 보고**: 기록으로 재현 못 함(그 시간대엔 테마였음). 다시 보이면 시각을 받아 HCI·relay.log 대조.
-2. 에코 "리프레싱 오션"의 정확한 RGB 미확정(테마 `0132019a019e` 색으로 추정). 사용자가 그 테마를 고르면 상태값에서 바로 확인 가능.
-3. 엔진 사운드 앱(0.9.3, "K8 차량" 입력)의 텔레메트리 연결을 실주행에서 확인(`telemetry client connected`).
-4. ESP32(C안): 사용자가 산 보드는 **ESP32-S3**라 클래식 BT가 없다 → 헤드유닛 Wi-Fi 또는 USB 시리얼 경로를 읽기 전용으로 먼저 확인하거나 일반 ESP32 사용.
+1. **0.4.4의 Zengge 응답과 과속 경고 확인**. 이전 관측에서 Lotus만 깜빡였다. 증상이 다시 나오면 정차 후 시각, Zengge MTU,
+   앱의 ‘Zengge 경고 전송 (켜짐 / 꺼짐)’ 수를 받아 HCI와 대조한다. 시동 점등과 경고 종료 페이드도 같은 사용 중 확인한다.
+2. **직접 고른 색 + 연동 켜짐에서 모드 전환이 안 바뀐다는 사용자 보고**: 기록으로 재현 못 함(그 시간대엔 테마였음). 다시 보이면 시각을 받아 HCI·relay.log 대조.
+3. 에코 "리프레싱 오션"의 정확한 RGB 미확정(테마 `0132019a019e` 색으로 추정). 사용자가 그 테마를 고르면 상태값에서 바로 확인 가능.
+4. 엔진 사운드 앱(0.9.3, "K8 차량" 입력)의 텔레메트리 연결을 실주행에서 확인(`telemetry client connected`).
+5. ESP32(C안): 사용자가 산 보드는 **ESP32-S3**라 클래식 BT가 없다 → 헤드유닛 Wi-Fi 또는 USB 시리얼 경로를 읽기 전용으로 먼저 확인하거나 일반 ESP32 사용.
    속도 이득은 수십 ms뿐이고 장점은 휴대폰 없이 동작하는 안정성.
-5. 정리 후보: 차량의 시험용 BLE 점검 패키지 제거, `relay.log` 크기 제한(현재 무제한 증가), 차량 `persist.service.adb.tcp.enable=1`(무선 AA 충돌 이력, 사용자 판단 대기·임의 변경 금지).
+6. 정리 후보: 차량의 시험용 BLE 점검 패키지 제거, `relay.log` 크기 제한(현재 무제한 증가), 차량 `persist.service.adb.tcp.enable=1`(무선 AA 충돌 이력, 사용자 판단 대기·임의 변경 금지).
 
 ## 검사·빌드·설치
 
 ```bash
 JAVA_HOME="/c/Users/dlatn/OneDrive/문서/ChatGPT/kia 자동잠금/analysis/tools/.toolchain/jdk17" python tools/check.py
 ```
-기준: 코어 319, Python 90(1 skip), host 14, 진단 모의 37, BLE probe 24, 차량 중계 API19 컴파일.
+0.4.4 기준: 코어 335, Python 89 통과·1 건너뜀, host 14, 진단 모의 37, BLE probe 24, 차량 중계 API 19 컴파일.
 
 - 차량 중계: `python tools/build_api19_dex.py --target relay --d8 <build-tools>/lib/d8.jar --jdk <JDK17>` → `python tools/build_nemesis_relay.py`
   (버전은 `tools/build_nemesis_relay.py`의 `PACKAGE_VERSION`). DEX 빌드가 실패해도 zip은 옛 DEX로 만들어지니 `dex_sha256`을 확인.

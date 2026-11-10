@@ -1,16 +1,19 @@
 # K8 Ambient Sync
 
-## 재개 순서
-0. **`docs/HANDOFF.md`를 먼저 읽는다** (현재 설치 상태, 동작 구조, 남은 일, 빌드·설치 절차).
-1. 이 파일, `docs/PROGRESS.md`(위쪽이 최신), `docs/DECISIONS.md`를 읽는다.
-2. `git status --short --branch`, 최근 커밋, remote를 확인한다. 기존 변경을 덮어쓰지 않는다.
+## Codex·Claude 공용 작업 순서
+1. **[공용 인수인계](docs/HANDOFF.md)** → 이 파일 → `docs/PROGRESS.md`(위쪽이 최신) → `docs/DECISIONS.md` 순으로 읽는다.
+2. 이 저장소에서 `git status --short --branch`와 remote를 확인한다. 공용 브랜치는 `codex/device-evidence`다.
+   현재 브랜치가 공용 브랜치임을 확인한 뒤 변경 전에 `git fetch origin`, `git pull --ff-only origin codex/device-evidence`를 실행하고 최근 커밋을 확인한다.
+   다른 세션이 같은 체크아웃에서 편집 중이면 넘겨받은 뒤 작업한다. 기존 변경을 덮어쓰거나 임의로 stash하지 않는다.
 3. `docs/research/`의 SHA 고정 근거를 활용하고 재조사는 변경 또는 부족한 근거에 한한다.
-4. 세션 종료 전에 PROGRESS에 실제 완료/검증/미확인/다음 작업을 기록한다.
+4. 세션을 넘길 때 `docs/PROGRESS.md` 위에 변경·검증·미확인·다음 작업을 기록한다. 설치 버전이나 다음 확인 항목이 바뀌면
+   `docs/HANDOFF.md`도 갱신하고, 세션별 상세 인계는 `docs/AI_HANDOFF.md`에 기록한다.
+5. 공유할 소스와 문서만 커밋하고 공용 브랜치에 일반 Push한다. Push가 거절되면 상대 변경부터 확인한다.
 
 ## 목표와 우선순위
 2021 K8 GL3 HEV Gen5W에서 **순정 설정을 읽어** 기존 Lotus Lamp X 사제 조명을 동기화한다.
 Gen5W 직접 BLE(A) → Galaxy 중계(B) → 별도 장치(C) 순서로 검토한다.
-현재 단계는 오프라인 검증과 수동 관측용 진단 소스다. K8 호환이나 실차 성공을 추정하지 않는다.
+B안은 실차에서 동작이 확인됐다. 최신 빌드의 설치 여부와 실차 확인 범위는 `docs/HANDOFF.md`를 따른다.
 
 ## 변경과 검증
 - main은 안정 기준, 기능 작업은 `codex/` 브랜치. 기능 단위로 커밋한다.
