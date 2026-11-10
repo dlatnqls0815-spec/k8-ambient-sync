@@ -580,6 +580,30 @@ public final class TestMain {
                 "warning recovery reaches the original color at the configured time");
     }
 
+    private static void zenggeCameraPulses() {
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forScaledColor(mock, new ZenggeFrames.Codec(ColorOrder.GRB), 100);
+        K8LotusMapping mapping = new K8LotusMapping();
+        ColorTone tone = new ColorTone(18, 100, 100, 85, 100);
+        AmbientState lit = tone.apply(mapping.map(SmlStatus.parse(RelayProtocol.decodeLine("SML 00ff0032001d0b0102"))));
+        AmbientState dark = tone.apply(mapping.map(SmlStatus.parse(RelayProtocol.decodeLine("SML 00ff0032001d010102"))));
+        engine.setEnabled(true);
+        engine.onState(lit);
+        engine.tick(0, 0);
+        engine.onState(dark);
+        engine.tick(1000, 0);
+        engine.onState(lit);
+        engine.tick(2000, 0);
+        check(mock.writes.size() == 3, "each Zengge warning edge produces one write");
+        byte[] first = mock.writes.get(0), second = mock.writes.get(1), third = mock.writes.get(2);
+        check(first.length == 21 && second.length == 21 && third.length == 21,
+                "Zengge warning commands require room for all 21 bytes");
+        check((first[11] & 255) == 255 && (third[11] & 255) == 255
+                && second[10] == 0 && second[11] == 0 && second[12] == 0,
+                "Zengge GRB warning sends full red, black, then full red");
+    }
+
     private static void deduplicationAndCoalescing() {
         MockTransport mock = new MockTransport();
         SyncEngine engine = new SyncEngine(mock, 100);
@@ -846,6 +870,7 @@ public final class TestMain {
         lotusStartupFade();
         zenggeStartupFade();
         cameraWarningRecoveryFade();
+        zenggeCameraPulses();
         userBrightnessCalibration();
         deduplicationAndCoalescing();
         powerAndReconnect();

@@ -25,6 +25,8 @@ final class GattTransport implements SyncEngine.Transport {
     static final UUID ZENGGE_SERVICE = uuid16(0xffff), ZENGGE_WRITE = uuid16(0xff01), ZENGGE_NOTIFY = uuid16(0xff02);
     private static final UUID CCCD = uuid16(0x2902);
     private static final long CONNECT_MS = 12000, DISCOVER_MS = 8000, WRITE_MS = 1000;
+    private static final long MTU_WAIT_MS = 750;
+    private static final int ZENGGE_MIN_MTU = 24; // 21-byte color frame + 3-byte ATT Write Command header.
 
     static UUID uuid16(int value) {
         return UUID.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", value));
@@ -48,6 +50,7 @@ final class GattTransport implements SyncEngine.Transport {
     private BluetoothGattCharacteristic characteristic;
     private volatile boolean ready;
     private int state = -1, discoverStatus = -1, writeStatus = -1;
+    private int mtu;
     private boolean discovered, writeDone, descriptorDone;
 
     private GattTransport(Context context, BluetoothAdapter adapter, String address, int slot,
@@ -93,6 +96,14 @@ final class GattTransport implements SyncEngine.Transport {
                 lock.notifyAll();
             }
         }
+
+        @Override public void onMtuChanged(BluetoothGatt g, int size, int status) {
+            synchronized (lock) {
+                if (g != gatt) return;
+                mtu = status == BluetoothGatt.GATT_SUCCESS ? size : -1;
+                lock.notifyAll();
+            }
+        }
     };
 
     @Override public boolean connected() {
@@ -107,6 +118,7 @@ final class GattTransport implements SyncEngine.Transport {
             synchronized (lock) {
                 state = -1;
                 discovered = false;
+                mtu = 0;
             }
             BluetoothGatt opened = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE);
             if (opened == null) throw new IOException("connectGatt returned null");
@@ -114,6 +126,13 @@ final class GattTransport implements SyncEngine.Transport {
                 gatt = opened;
                 await(CONNECT_MS, new Done() { public boolean done() { return state >= 0; } });
                 if (state != BluetoothProfile.STATE_CONNECTED) throw new IOException("connect failed");
+            }
+            if (slot == RelayStatus.ZENGGE && opened.requestMtu(64)) {
+                synchronized (lock) {
+                    await(MTU_WAIT_MS, new Done() { public boolean done() {
+                        return mtu != 0 || state == BluetoothProfile.STATE_DISCONNECTED;
+                    } });
+                }
             }
             if (!opened.discoverServices()) throw new IOException("discovery rejected");
             synchronized (lock) {
@@ -135,7 +154,11 @@ final class GattTransport implements SyncEngine.Transport {
             opened.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
             characteristic = found;
             ready = true;
-            RelayStatus.lamp(slot, "준비됨");
+            synchronized (lock) {
+                RelayStatus.lamp(slot, slot != RelayStatus.ZENGGE ? "준비됨"
+                        : mtu >= ZENGGE_MIN_MTU ? "준비됨 (MTU " + mtu + ")"
+                        : mtu > 0 ? "MTU 부족 (" + mtu + ")" : "준비됨 (MTU 미확인)");
+            }
         } catch (SecurityException error) {
             closeGatt();
             RelayStatus.lamp(slot, "권한 없음");
@@ -155,6 +178,9 @@ final class GattTransport implements SyncEngine.Transport {
         BluetoothGatt current = gatt;
         if (!ready || current == null || characteristic == null) throw new IOException("not ready");
         synchronized (lock) {
+            if (slot == RelayStatus.ZENGGE && mtu > 0 && mtu < ZENGGE_MIN_MTU) {
+                throw new IOException("ATT MTU too small for Zengge color");
+            }
             writeDone = false;
         }
         int result;

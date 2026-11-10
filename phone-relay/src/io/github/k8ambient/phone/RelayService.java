@@ -57,7 +57,8 @@ public final class RelayService extends Service {
         ColorTone tone = ColorTone.NEUTRAL;
         long fadeMs;
         AmbientState lastMapped;
-        boolean cameraWarning;
+        boolean cameraWarning, recoveryFade;
+        long warningOnWrites, warningOffWrites;
 
         final boolean zengge;
 
@@ -75,14 +76,24 @@ public final class RelayService extends Service {
         final Runnable tick = new Runnable() {
             public void run() {
                 if (stopping) return;
-                long now = SystemClock.elapsedRealtime();
-                AmbientState shown = fader.current(now);
-                if (shown != null) engine.onState(shown);
-                long startupFade = fadeMs == 0 || cameraWarning ? 0 : STARTUP_FADE_MS;
-                try { engine.tick(now, startupFade); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
+                render(SystemClock.elapsedRealtime());
                 handler.postDelayed(this, TICK_MS);
             }
         };
+
+        private void render(long now) {
+            AmbientState shown = fader.current(now);
+            if (shown == null) return;
+            engine.onState(shown);
+            long startupFade = fadeMs == 0 || cameraWarning ? 0 : STARTUP_FADE_MS;
+            long sentBefore = engine.getSuccessfulWrites();
+            try { engine.tick(now, startupFade); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
+            if (zengge && cameraWarning && engine.getSuccessfulWrites() != sentBefore) {
+                if (shown.on) warningOnWrites++;
+                else warningOffWrites++;
+                RelayStatus.zenggeWarningWrites = warningOnWrites + " / " + warningOffWrites;
+            }
+        }
 
         /** Re-reads tone and fade settings and re-applies the last state at once (live preview). */
         final Runnable reloadTone = new Runnable() {
@@ -99,11 +110,16 @@ public final class RelayService extends Service {
                 public void run() {
                     // The cached recovery state and the next SML response can have the same target.
                     if (state.equals(lastMapped) && warningFrame == cameraWarning) return;
+                    long now = SystemClock.elapsedRealtime();
+                    recoveryFade = !warningFrame && (cameraWarning || (recoveryFade && fader.active(now)));
                     lastMapped = state;
                     cameraWarning = warningFrame;
-                    long now = SystemClock.elapsedRealtime();
                     // The factory alert blinks once a second; a fade would blur and delay it.
-                    fader.target(tone.apply(state), now, warningFrame ? 0 : fadeMs);
+                    // On Zengge send one ordinary color, not a queue of intermediate frames.
+                    long duration = warningFrame || (zengge && !recoveryFade) ? 0 : fadeMs;
+                    fader.target(tone.apply(state), now, duration);
+                    // Keep the engine's write pacing; if still rate-limited, the next tick retries.
+                    if (zengge) render(now);
                 }
             });
         }

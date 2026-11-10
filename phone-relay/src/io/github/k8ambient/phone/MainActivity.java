@@ -172,6 +172,8 @@ public final class MainActivity extends Activity {
             s.append("현재 테마: ").append(RelayStatus.themeKey == null ? "직접색 또는 없음" : RelayStatus.themeKey).append('\n');
             s.append("보낸 패킷 Lotus: ").append(RelayStatus.packets[RelayStatus.LOTUS]).append(" / 마지막 ").append(RelayStatus.lastSent[RelayStatus.LOTUS]).append('\n');
             s.append("보낸 패킷 Zengge: ").append(RelayStatus.packets[RelayStatus.ZENGGE]).append(" / 마지막 ").append(RelayStatus.lastSent[RelayStatus.ZENGGE]).append('\n');
+            if (prefs.zengge() != null)
+                s.append("Zengge 경고 전송 (켜짐 / 꺼짐): ").append(RelayStatus.zenggeWarningWrites).append('\n');
             s.append("저장된 테마 색: ");
             for (Map.Entry<String, int[]> e : prefs.themes().entrySet()) {
                 int[] c = e.getValue();
