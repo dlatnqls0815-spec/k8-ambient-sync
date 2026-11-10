@@ -1,7 +1,8 @@
 # K8 Ambient Sync
 
 ## 재개 순서
-1. 이 파일, `docs/PROGRESS.md`, `docs/DECISIONS.md`를 읽는다.
+0. **`docs/HANDOFF.md`를 먼저 읽는다** (현재 설치 상태, 동작 구조, 남은 일, 빌드·설치 절차).
+1. 이 파일, `docs/PROGRESS.md`(위쪽이 최신), `docs/DECISIONS.md`를 읽는다.
 2. `git status --short --branch`, 최근 커밋, remote를 확인한다. 기존 변경을 덮어쓰지 않는다.
 3. `docs/research/`의 SHA 고정 근거를 활용하고 재조사는 변경 또는 부족한 근거에 한한다.
 4. 세션 종료 전에 PROGRESS에 실제 완료/검증/미확인/다음 작업을 기록한다.
