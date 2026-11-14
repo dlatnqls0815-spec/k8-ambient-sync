@@ -24,7 +24,20 @@ final class GattTransport implements SyncEngine.Transport {
     static final UUID LOTUS_SERVICE = uuid16(0xfff0), LOTUS_WRITE = uuid16(0xfff3);
     static final UUID ZENGGE_SERVICE = uuid16(0xffff), ZENGGE_WRITE = uuid16(0xff01), ZENGGE_NOTIFY = uuid16(0xff02);
     private static final UUID CCCD = uuid16(0x2902);
-    private static final long CONNECT_MS = 12000, DISCOVER_MS = 8000, WRITE_MS = 1000;
+    private static final long CONNECT_MS = 12000, WRITE_MS = 1000;
+    /** Normal discovery takes about 0.6 s; a hung one (seen after ignition) never finishes. */
+    private static final long DISCOVER_MS = 3000;
+    /**
+     * After our own close of a live link, Android keeps the ACL for about 4 s ("link idle timer").
+     * Reconnecting inside that window reuses it with a stuck or emptied GATT state (2026-11-11 HCI:
+     * discovery never sent for 40 s, or instant empty service lists), so wait until it has dropped.
+     */
+    private static final long FRESH_LINK_WAIT_MS = 5000;
+    /** Let the stack finish its own name/appearance reads on the Lotus before asking for discovery. */
+    private static final long LOTUS_SETTLE_MS = 500;
+    /** Transient "queue full" results are resent instead of dropping the link. */
+    private static final int BUSY_RETRIES = 4;
+    private static final int GATT_CONNECTION_CONGESTED = 0x8f;
     private static final long MTU_WAIT_MS = 750;
     private static final int ZENGGE_MIN_MTU = 24; // 21-byte color frame + 3-byte ATT Write Command header.
 
@@ -51,6 +64,8 @@ final class GattTransport implements SyncEngine.Transport {
     private volatile boolean ready;
     private int state = -1, discoverStatus = -1, writeStatus = -1;
     private int mtu;
+    /** System.currentTimeMillis() before which a new connection would reuse the old link. */
+    private long freshLinkAfter;
     private boolean discovered, writeDone, descriptorDone;
 
     private GattTransport(Context context, BluetoothAdapter adapter, String address, int slot,
@@ -112,6 +127,11 @@ final class GattTransport implements SyncEngine.Transport {
 
     @Override public void connect() throws IOException {
         closeGatt();
+        long wait = freshLinkAfter - System.currentTimeMillis();
+        if (wait > 0) {
+            RelayStatus.lamp(slot, "이전 연결 정리 대기");
+            try { Thread.sleep(wait); } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("interrupted"); }
+        }
         RelayStatus.lamp(slot, "연결 중");
         try {
             BluetoothDevice device = adapter.getRemoteDevice(address);
@@ -132,6 +152,12 @@ final class GattTransport implements SyncEngine.Transport {
                     await(MTU_WAIT_MS, new Done() { public boolean done() {
                         return mtu != 0 || state == BluetoothProfile.STATE_DISCONNECTED;
                     } });
+                }
+            }
+            if (slot == RelayStatus.LOTUS) {
+                synchronized (lock) {
+                    await(LOTUS_SETTLE_MS, new Done() { public boolean done() { return state == BluetoothProfile.STATE_DISCONNECTED; } });
+                    if (state != BluetoothProfile.STATE_CONNECTED) throw new IOException("connect lost");
                 }
             }
             if (!opened.discoverServices()) throw new IOException("discovery rejected");
@@ -183,19 +209,41 @@ final class GattTransport implements SyncEngine.Transport {
             }
             writeDone = false;
         }
-        int result;
-        try {
-            result = current.writeCharacteristic(characteristic, packet, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-        } catch (SecurityException error) {
-            throw new IOException("permission");
-        }
-        if (result != BluetoothStatusCodes.SUCCESS) throw new IOException("write rejected " + result);
-        synchronized (lock) {
-            await(WRITE_MS, new Done() { public boolean done() { return writeDone; } });
-            // Android still reports a callback for write-without-response; a missing one is treated as busy.
-            if (!writeDone || writeStatus != BluetoothGatt.GATT_SUCCESS) throw new IOException("write not confirmed");
+        // A congested link or a full write queue is transient: resend the same (idempotent) frame
+        // instead of failing, which used to drop and reconnect the lamp (2026-11-11, status 0x8f).
+        for (int attempt = 0; ; attempt++) {
+            int result;
+            try {
+                result = current.writeCharacteristic(characteristic, packet, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+            } catch (SecurityException error) {
+                throw new IOException("permission");
+            }
+            boolean busy;
+            if (result == BluetoothStatusCodes.SUCCESS) {
+                synchronized (lock) {
+                    await(WRITE_MS, new Done() { public boolean done() { return writeDone; } });
+                    // Android still reports a callback for write-without-response; a missing one is treated as lost.
+                    if (!writeDone) throw fail("write not confirmed");
+                    if (writeStatus == BluetoothGatt.GATT_SUCCESS) break;
+                    busy = writeStatus == GATT_CONNECTION_CONGESTED;
+                    if (!busy) throw fail("write failed " + writeStatus);
+                    writeDone = false;
+                }
+            } else {
+                busy = result == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY;
+                if (!busy) throw fail("write rejected " + result);
+            }
+            DiagLog.event(RelayStatus.lampTag(slot), "쓰기 혼잡, 재전송");
+            if (attempt >= BUSY_RETRIES || !ready || gatt != current) throw fail("write busy");
+            try { Thread.sleep(20L * (attempt + 1)); } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("interrupted"); }
         }
         RelayStatus.sent(slot, packet);
+    }
+
+    /** Records why a write failed (the engine then reconnects silently). */
+    private IOException fail(String message) {
+        DiagLog.event(RelayStatus.lampTag(slot), "쓰기 실패: " + message);
+        return new IOException(message);
     }
 
     @Override public void disconnect() {
@@ -208,6 +256,11 @@ final class GattTransport implements SyncEngine.Transport {
         BluetoothGatt old = gatt;
         gatt = null;
         if (old == null) return;
+        synchronized (lock) {
+            // Closing a link that is still up: the next connect must wait until Android drops it.
+            // A link the lamp already lost (power off at ignition) can be reconnected at once.
+            if (state == BluetoothProfile.STATE_CONNECTED) freshLinkAfter = System.currentTimeMillis() + FRESH_LINK_WAIT_MS;
+        }
         try { old.disconnect(); } catch (SecurityException ignored) { }
         try { old.close(); } catch (SecurityException ignored) { }
     }

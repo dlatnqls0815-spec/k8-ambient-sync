@@ -12,6 +12,7 @@ import android.content.Intent;
  */
 public final class AutoStartReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
+        DiagLog.init(context);
         Prefs prefs = new Prefs(context);
         if (!prefs.auto() || prefs.car() == null || !prefs.anyLamp() || RelayStatus.running) return;
         String action = intent.getAction();

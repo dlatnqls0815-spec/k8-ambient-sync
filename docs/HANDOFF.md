@@ -16,10 +16,11 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 | 위치 | 버전 | 산출물 |
 |---|---|---|
 | 차량 NEMESIS `k8ambient.relay` | **0.3.5** | `private/nemesis-relay/k8ambient.relay-0.3.5.zip` |
-| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.4** (code 13), 2026-11-10 USB로 설치·서비스 재시작 확인 | `../../deliverables/k8-ambient-phone-relay-0.4.4.apk` |
+| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.7** (code 16), 2026-11-14 USB로 설치·진단 기록 생성 확인 | `../../deliverables/k8-ambient-phone-relay-0.4.7.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
-0.4.2~0.4.4 기능의 실차 반응은 아직 미확인이다(0.4.1까지의 기능은 실차 확인됨).
+0.4.6은 시동 직후 차량 재접속 대기(최대 30초)를 없앴다(차량 ACL 연결 시 즉시 재시도). 0.4.5는 시동 뒤 Lotus가 수십 초 반응하지 않던 문제(혼잡 쓰기에 링크를 끊고, 남은 링크에 바로 재연결)를 고쳤다. 시동 재시험은 아직.
+0.4.2~0.4.4 기능(첫 점등 페이드, 경고 종료 복귀, Zengge 경고)은 일부만 실차 확인(0.4.1까지는 확인됨).
 
 사용자가 확인한 동작: 색·밝기·테마 추종, 꺼짐(Lotus 전원 프레임 옵션), 부드러운 전환·톤, Zengge 색(빨강·초록 순서 보정),
 Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠·에코·스마트), 시동 껐다 켜면 에코 색 유지, 시동 시 앱 자동 시작.
@@ -73,6 +74,7 @@ JAVA_HOME="/c/Users/dlatn/OneDrive/문서/ChatGPT/kia 자동잠금/analysis/tool
 - 차량 설치(사용자 승인 후): **먼저 logcat에서 속도 0 확인**(`getSpeed_KMHUnit() = 0.0` 또는 `SYS_SPEED_M: 0`) →
   Git Bash는 `MSYS_NO_PATHCONV=1`로 `adb push <zip> /data/local/tmp/` → `nemesis install --update <zip>` → 설치된 DEX `md5` 비교 → relay.log에 `started`·`phone connected` 확인 → 임시 zip 삭제.
 - 휴대폰 설치: `adb -s <serial> install -r private/phone-relay/k8-ambient-phone-relay.apk`.
+- 휴대폰 진단 기록(0.4.7+): `adb -s <serial> pull /sdcard/Android/data/io.github.k8ambient.phone/files/relay-events.log` (사용자가 알려 준 실패 시각 전후를 차량 relay.log와 대조).
 - 휴대폰 Bluetooth 증거: `adb bugreport` → `FS/data/log/bt/btsnoop_hci.log*` → `.tools/wireshark/.../tshark.exe`(캡처 시각이 9시간 앞서 있음).
 
 ## 지킬 것

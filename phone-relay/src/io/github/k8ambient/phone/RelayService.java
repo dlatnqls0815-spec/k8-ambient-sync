@@ -8,7 +8,10 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -47,6 +50,15 @@ public final class RelayService extends Service {
     private volatile boolean stopping, reloadThemes;
     private volatile BluetoothSocket socket;
     private volatile long lastLineAt;
+    /**
+     * While the car is off the retry interval grows to 30 s, so at ignition the phone used to reach the
+     * relay up to 30 s late (2026-11-11: relay ready 17:46:34, phone 17:47:01). When the phone's
+     * Bluetooth reconnects to the car, retry at once and then every 3 s for 2 minutes.
+     */
+    private static final long FAST_RETRY_MS = 3000, FAST_WINDOW_MS = 120000, SLOW_RETRY_MAX_MS = 30000;
+    private final Object carWake = new Object();
+    private volatile long fastRetryUntil;
+    private BroadcastReceiver carAclReceiver;
 
     /** One lamp: its engine, fader and tone are owned by its own thread. */
     private final class Lamp {
@@ -87,7 +99,10 @@ public final class RelayService extends Service {
             engine.onState(shown);
             long startupFade = fadeMs == 0 || cameraWarning ? 0 : STARTUP_FADE_MS;
             long sentBefore = engine.getSuccessfulWrites();
-            try { engine.tick(now, startupFade); } catch (RuntimeException error) { RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName()); }
+            try { engine.tick(now, startupFade); } catch (RuntimeException error) {
+                RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName());
+                DiagLog.event("error", (zengge ? "zengge" : "lotus") + " " + error);
+            }
             if (zengge && cameraWarning && engine.getSuccessfulWrites() != sentBefore) {
                 if (shown.on) warningOnWrites++;
                 else warningOffWrites++;
@@ -141,6 +156,7 @@ public final class RelayService extends Service {
         }
         // startForegroundService() requires startForeground() on every start, even one that exits at once.
         startInForeground();
+        DiagLog.init(this);
         if (started) return START_STICKY;
         final Prefs prefs = new Prefs(this);
         BluetoothManager manager = getSystemService(BluetoothManager.class);
@@ -152,6 +168,9 @@ public final class RelayService extends Service {
             return START_NOT_STICKY;
         }
         started = true;
+        DiagLog.event("app", "중계 시작 " + versionName()
+                + (prefs.lamp() != null ? " Lotus" : "") + (prefs.zengge() != null ? " Zengge" : "")
+                + (prefs.power() ? " 전원옵션" : ""));
         RelayStatus.reset();
         RelayStatus.running = true;
 
@@ -171,6 +190,17 @@ public final class RelayService extends Service {
             public void run() { carLoop(adapter, prefs); }
         }, "car-link");
         carThread.start();
+        final String carAddress = prefs.car();
+        carAclReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context context, Intent intent) {
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);
+                if (device == null || !carAddress.equalsIgnoreCase(device.getAddress())) return;
+                fastRetryUntil = SystemClock.elapsedRealtime() + FAST_WINDOW_MS;
+                DiagLog.event("car", "차량 블루투스 연결 감지 → 즉시 재접속");
+                synchronized (carWake) { carWake.notifyAll(); }
+            }
+        };
+        registerReceiver(carAclReceiver, new IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED), Context.RECEIVER_EXPORTED);
         watchdog = new Thread(new Runnable() {
             public void run() { watchCarLink(); }
         }, "car-watchdog");
@@ -222,6 +252,7 @@ public final class RelayService extends Service {
                             handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
                     }
                     Integer mode = RelayProtocol.decodeDriveMode(line);
+                    if (mode != null) DiagLog.event("rx", line.trim());
                     if (mode != null) {
                         driveMode = mode.intValue();
                         RelayStatus.driveMode = driveMode;
@@ -230,6 +261,7 @@ public final class RelayService extends Service {
                         continue;
                     }
                     Boolean alert = RelayProtocol.decodeAlert(line);
+                    if (alert != null) DiagLog.event("rx", line.trim());
                     if (alert != null) {
                         boolean ended = warning && !alert.booleanValue();
                         warning = alert.booleanValue();
@@ -244,13 +276,15 @@ public final class RelayService extends Service {
                     try { raw = RelayProtocol.decodeLine(line); }
                     catch (IllegalArgumentException bad) { continue; }
                     if (raw == null) continue;
+                    DiagLog.event("rx", line.trim());
                     SmlStatus status = SmlStatus.parse(raw);
                     if (!warning) lastNormalStatus = status;
                     handleStatus(mapping, driveLight, driveMode, status, warning);
                 }
                 RelayStatus.car("연결 끊김");
             } catch (IOException error) {
-                RelayStatus.car("연결 실패, " + backoff / 1000 + "초 후 재시도");
+                RelayStatus.car("연결 실패, " + (SystemClock.elapsedRealtime() < fastRetryUntil ? FAST_RETRY_MS : backoff) / 1000
+                        + "초 후 재시도 (시동 시 즉시)");
             } catch (SecurityException error) {
                 RelayStatus.car("블루투스 권한 없음");
             } catch (IllegalArgumentException error) {
@@ -261,8 +295,15 @@ public final class RelayService extends Service {
                 if (open != null) try { open.close(); } catch (IOException ignored) { }
             }
             if (stopping) break;
-            SystemClock.sleep(backoff);
-            backoff = Math.min(30000, backoff * 2);
+            boolean fast = SystemClock.elapsedRealtime() < fastRetryUntil;
+            long wait = fast ? FAST_RETRY_MS : backoff;
+            synchronized (carWake) {
+                // An ACL connection to the car (ignition on) wakes this wait early.
+                long wokeBefore = fastRetryUntil;
+                try { carWake.wait(wait); } catch (InterruptedException e) { if (stopping) break; }
+                if (fastRetryUntil != wokeBefore) backoff = FAST_RETRY_MS;
+            }
+            backoff = SystemClock.elapsedRealtime() < fastRetryUntil ? FAST_RETRY_MS : Math.min(SLOW_RETRY_MAX_MS, backoff * 2);
         }
     }
 
@@ -278,8 +319,11 @@ public final class RelayService extends Service {
             RelayStatus.target = RelayStatus.stamp("알 수 없는 밝기 " + status.brightnessRaw);
             return;
         }
-        RelayStatus.target = RelayStatus.stamp((state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
-                + " RGB " + state.red + "," + state.green + "," + state.blue);
+        String target = (state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
+                + " RGB " + state.red + "," + state.green + "," + state.blue
+                + (warning ? " (경고)" : "") + " 모드 " + driveMode + (DriveModeLight.linked(status) ? " 연동" : "");
+        RelayStatus.target = RelayStatus.stamp(target);
+        DiagLog.event("target", target);
         for (Lamp lamp : lamps) lamp.show(state, warning);
     }
 
@@ -295,11 +339,19 @@ public final class RelayService extends Service {
         startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
     }
 
+    private String versionName() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Exception error) { return "?"; }
+    }
+
     @Override public void onDestroy() {
+        DiagLog.event("app", "중계 중지");
         stopping = true;
         RelayStatus.running = false;
         BluetoothSocket open = socket;
         if (open != null) try { open.close(); } catch (IOException ignored) { }
+        if (carAclReceiver != null) try { unregisterReceiver(carAclReceiver); } catch (IllegalArgumentException ignored) { }
+        synchronized (carWake) { carWake.notifyAll(); }
         if (carThread != null) carThread.interrupt();
         if (watchdog != null) watchdog.interrupt();
         for (Lamp lamp : lamps) lamp.stop();

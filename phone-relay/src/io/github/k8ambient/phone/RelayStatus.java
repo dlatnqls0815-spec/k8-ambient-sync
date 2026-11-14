@@ -18,8 +18,19 @@ final class RelayStatus {
 
     private RelayStatus() {}
 
-    static void car(String text) { car = stamp(text); }
-    static void lamp(int slot, String text) { lamp[slot] = stamp(text); }
+    static void car(String text) {
+        car = stamp(text);
+        // "연결 중" alternates with the failure line while the car is off; skipping it lets the log
+        // collapse hours of retries into one line with a count.
+        if (!"연결 중".equals(text)) DiagLog.event("car", text);
+    }
+
+    static void lamp(int slot, String text) {
+        lamp[slot] = stamp(text);
+        DiagLog.event(lampTag(slot), text);
+    }
+
+    static String lampTag(int slot) { return slot == LOTUS ? "lotus" : "zengge"; }
 
     static void sent(int slot, byte[] packet) {
         packets[slot]++;
