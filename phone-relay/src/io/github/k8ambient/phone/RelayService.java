@@ -21,6 +21,7 @@ import io.github.k8ambient.core.AmbientState;
 import io.github.k8ambient.core.ColorTone;
 import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.Fader;
+import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
 import io.github.k8ambient.core.RelayProtocol;
 import io.github.k8ambient.core.SmlStatus;
@@ -67,6 +68,7 @@ public final class RelayService extends Service {
         final SyncEngine engine;
         final Fader fader = new Fader();
         ColorTone tone = ColorTone.NEUTRAL;
+        HueBrightness hue = HueBrightness.NEUTRAL;
         long fadeMs;
         AmbientState lastMapped;
         boolean cameraWarning, recoveryFade;
@@ -115,10 +117,16 @@ public final class RelayService extends Service {
             public void run() {
                 Prefs prefs = new Prefs(RelayService.this);
                 tone = prefs.tone(zengge);
+                hue = prefs.hueBrightness();
                 fadeMs = prefs.fadeMs();
-                if (lastMapped != null) fader.target(tone.apply(lastMapped), SystemClock.elapsedRealtime(), 0);
+                if (lastMapped != null) fader.target(toned(lastMapped), SystemClock.elapsedRealtime(), 0);
             }
         };
+
+        /** Tone correction, then the per-color brightness ratio (hue of the factory color). */
+        AmbientState toned(AmbientState state) {
+            return hue.apply(state, tone.apply(state));
+        }
 
         void show(final AmbientState state, final boolean warningFrame) {
             handler.post(new Runnable() {
@@ -132,7 +140,7 @@ public final class RelayService extends Service {
                     // The factory alert blinks once a second; a fade would blur and delay it.
                     // On Zengge send one ordinary color, not a queue of intermediate frames.
                     long duration = warningFrame || (zengge && !recoveryFade) ? 0 : fadeMs;
-                    fader.target(tone.apply(state), now, duration);
+                    fader.target(toned(state), now, duration);
                     // Keep the engine's write pacing; if still rate-limited, the next tick retries.
                     if (zengge) render(now);
                 }

@@ -377,6 +377,43 @@ public final class TestMain {
         rejects(new Action() { public void run() { new K8LotusMapping().setThemeColor("016b015a0195", 256, 2, 3); } });
     }
 
+    private static void hueBrightness() {
+        HueBrightness user = HueBrightness.USER_DEFAULT;
+        ColorTone lotus = new ColorTone(18, 100, 100, 85, 20);
+        // The user's targets against the 20 % Lotus maximum at factory level 10.
+        AmbientState warm = new AmbientState(255, 166, 70, 100, true);   // factory orange 00ff00a60046
+        check(user.apply(warm, lotus.apply(warm)).brightness >= 27, "warm orange near 30 %");
+        AmbientState red = new AmbientState(255, 0, 0, 100, true);
+        check(user.apply(red, lotus.apply(red)).brightness == 13, "red 13 %");
+        AmbientState blue = new AmbientState(0, 0, 255, 100, true);
+        check(user.apply(blue, lotus.apply(blue)).brightness == 13, "blue 13 %");
+        AmbientState purple = new AmbientState(0x9b, 0x21, 0xef, 100, true); // factory purple 009b002100ef
+        int purpleLevel = user.apply(purple, lotus.apply(purple)).brightness;
+        check(purpleLevel >= 12 && purpleLevel <= 15, "purple about 13 %");
+        AmbientState yellow = new AmbientState(255, 220, 0, 100, true);
+        check(user.apply(yellow, lotus.apply(yellow)).brightness == 30, "yellow 30 %");
+        AmbientState white = new AmbientState(255, 255, 255, 100, true);
+        check(user.apply(white, lotus.apply(white)).brightness == 20, "white unchanged");
+        AmbientState green = new AmbientState(0, 255, 0, 100, true);
+        check(user.apply(green, lotus.apply(green)).brightness == 20, "green unchanged by default");
+        check(Math.abs(user.ratioFor(255, 0, 0) - 65) < 0.01 && Math.abs(user.ratioFor(255, 128, 0) - 150) < 0.5,
+                "anchor ratios at red and warm hue");
+        double between = user.ratioFor(255, 64, 0); // hue 15, halfway red→warm
+        check(Math.abs(between - 107.5) < 1, "hues between anchors blend");
+        double peach = user.ratioFor(255, 200, 150);
+        check(peach > 120 && peach < 150, "pale warm (peach) is brightened less than full orange");
+        double pink = user.ratioFor(255, 0, 128); // hue 330, between purple and red
+        check(Math.abs(pink - 65) < 0.01, "wraps around the hue circle");
+        check(HueBrightness.NEUTRAL.apply(warm, lotus.apply(warm)).equals(lotus.apply(warm)), "neutral is identity");
+        AmbientState off = new AmbientState(255, 166, 70, 0, false);
+        check(!user.apply(off, lotus.apply(off)).on && user.apply(off, lotus.apply(off)).brightness == 0, "off stays off");
+        AmbientState full = new AmbientState(255, 166, 70, 100, true);
+        check(new HueBrightness(new int[] {300, 300, 300, 300, 300, 300}).apply(full, full).brightness == 100, "capped at 100 %");
+        check(user.ratioFor(0, 0, 0) == 100, "black has no hue");
+        rejects(new Action() { public void run() { new HueBrightness(new int[] {100, 100, 100}); } });
+        rejects(new Action() { public void run() { new HueBrightness(new int[] {10, 100, 100, 100, 100, 100}); } });
+    }
+
     private static void colorTone() {
         AmbientState pink = new AmbientState(255, 0, 128, 100, true);
         check(ColorTone.NEUTRAL.apply(pink).equals(pink), "neutral tone is identity");
@@ -860,6 +897,7 @@ public final class TestMain {
         telemetryProtocol();
         k8LotusMapping();
         colorTone();
+        hueBrightness();
         fader();
         zengge();
         driveModeLight();

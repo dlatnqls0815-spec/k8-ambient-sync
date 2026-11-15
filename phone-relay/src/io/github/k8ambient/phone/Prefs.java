@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import io.github.k8ambient.core.ColorOrder;
 import io.github.k8ambient.core.ColorTone;
 import io.github.k8ambient.core.DriveModeLight;
+import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
 import java.util.Map;
 import java.util.TreeMap;
@@ -44,6 +45,7 @@ final class Prefs {
     static final int DEFAULT_FADE_MS = 300;
 
     int get(String key) {
+        for (int i = 0; i < HUE_KEYS.length; i++) if (HUE_KEYS[i].equals(key)) return hueRatio(i);
         if (FADE_MS.equals(key)) return prefs.getInt(key, DEFAULT_FADE_MS);
         if (ZENGGE_MAX.equals(key)) return prefs.getInt(key, 100);
         if (GAMMA.equals(key)) return prefs.getInt(key, 18);
@@ -61,6 +63,20 @@ final class Prefs {
     }
 
     long fadeMs() { return clamp(get(FADE_MS), 0, 5000); }
+
+    /** Per-color brightness ratio keys (red, warm, green, sky, blue, purple), percent of the lamp maximum. */
+    static final String[] HUE_KEYS = {"hueRed", "hueWarm", "hueGreen", "hueSky", "hueBlue", "huePurple"};
+
+    int hueRatio(int anchor) {
+        return clamp(prefs.getInt(HUE_KEYS[anchor], HueBrightness.USER_DEFAULT.ratio(anchor)),
+                HueBrightness.MIN_RATIO, HueBrightness.MAX_RATIO);
+    }
+
+    HueBrightness hueBrightness() {
+        int[] ratios = new int[HUE_KEYS.length];
+        for (int i = 0; i < ratios.length; i++) ratios[i] = hueRatio(i);
+        return new HueBrightness(ratios);
+    }
 
     private static int clamp(int value, int low, int high) { return Math.max(low, Math.min(high, value)); }
 

@@ -131,6 +131,12 @@ public final class MainActivity extends Activity {
         slider(layout, "Lotus 최대 밝기(순정 최대일 때)", Prefs.MAX, 5, 50, 1, "%");
         slider(layout, "Zengge 최대 밝기(순정 최대일 때)", Prefs.ZENGGE_MAX, 5, 100, 1, "%");
 
+        text(layout, "\n색별 밝기 (위 최대 밝기 대비, 100%=그대로. 예: Lotus 20%에서 150%=30%, 65%=13%)");
+        String[] hueNames = {"빨강", "따뜻한 색(주황·노랑)", "초록", "하늘", "파랑", "보라"};
+        for (int i = 0; i < hueNames.length; i++) {
+            slider(layout, hueNames[i] + " 밝기", Prefs.HUE_KEYS[i], 20, 300, 5, "%");
+        }
+
         status = new TextView(this);
         status.setTextIsSelectable(true);
         layout.addView(status);

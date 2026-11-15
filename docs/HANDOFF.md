@@ -16,7 +16,7 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 | 위치 | 버전 | 산출물 |
 |---|---|---|
 | 차량 NEMESIS `k8ambient.relay` | **0.3.5** | `private/nemesis-relay/k8ambient.relay-0.3.5.zip` |
-| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.7** (code 16), 2026-11-14 USB로 설치·진단 기록 생성 확인 | `../../deliverables/k8-ambient-phone-relay-0.4.7.apk` |
+| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.8** (code 17), 2026-11-14 USB로 설치, 색별 밝기 실차 확인(11-15) | `../../deliverables/k8-ambient-phone-relay-0.4.8.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
 0.4.6은 시동 직후 차량 재접속 대기(최대 30초)를 없앴다(차량 ACL 연결 시 즉시 재시도). 0.4.5는 시동 뒤 Lotus가 수십 초 반응하지 않던 문제(혼잡 쓰기에 링크를 끊고, 남은 링크에 바로 재연결)를 고쳤다. 시동 재시험은 아직.
