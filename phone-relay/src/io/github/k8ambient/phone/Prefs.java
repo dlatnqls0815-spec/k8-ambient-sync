@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import io.github.k8ambient.core.ColorOrder;
 import io.github.k8ambient.core.ColorTone;
 import io.github.k8ambient.core.DriveModeLight;
-import io.github.k8ambient.core.EspConfig;
 import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
 import java.util.Map;
@@ -80,40 +79,6 @@ final class Prefs {
     }
 
     private static int clamp(int value, int low, int high) { return Math.max(low, Math.min(high, value)); }
-
-    /**
-     * Plan C (0.5.0): the ESP32 drives the lamps and this app only hands its settings over.
-     * Off by default so an update keeps the proven phone relay until the ESP32 is checked in the car.
-     */
-    boolean espMode() { return prefs.getBoolean("espMode", false); }
-    void setEspMode(boolean value) { prefs.edit().putBoolean("espMode", value).apply(); }
-    String esp() { return prefs.getString("esp", null); }
-    void setEsp(String address) { prefs.edit().putString("esp", address).apply(); }
-    /** Last lamp output switch sent to the ESP32 (it keeps its own saved copy). */
-    boolean espOutput() { return prefs.getBoolean("espOutput", false); }
-    void setEspOutput(boolean value) { prefs.edit().putBoolean("espOutput", value).apply(); }
-
-    /** Everything the phone relay applied, as the ESP32 settings snapshot. */
-    EspConfig.Values espValues() {
-        EspConfig.Values v = new EspConfig.Values();
-        v.car = car();
-        v.lotus = lamp();
-        v.zengge = zengge();
-        v.order = zenggeOrder();
-        v.lotusPower = power();
-        v.fadeMs = (int) fadeMs();
-        v.gammaTenths = get(GAMMA);
-        v.redGain = get(RED);
-        v.greenGain = get(GREEN);
-        v.blueGain = get(BLUE);
-        v.lotusMax = get(MAX);
-        v.zenggeMax = get(ZENGGE_MAX);
-        for (int i = 0; i < HUE_KEYS.length; i++) v.hue[i] = hueRatio(i);
-        v.eco = driveColor(DRIVE_ECO);
-        v.sport = driveColor(DRIVE_SPORT);
-        v.themes = themes();
-        return v;
-    }
 
     /** True while the user wants the relay running; auto-start on car connect only then. */
     boolean auto() { return prefs.getBoolean("auto", false); }

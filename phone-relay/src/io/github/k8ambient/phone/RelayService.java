@@ -169,13 +169,6 @@ public final class RelayService extends Service {
         final Prefs prefs = new Prefs(this);
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         final BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
-        if (prefs.espMode()) {
-            // The lamps accept one central; the ESP32 holds them in this mode.
-            RelayStatus.car("ESP32 모드: 휴대폰 중계 꺼짐");
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
-            return START_NOT_STICKY;
-        }
         if (adapter == null || prefs.car() == null || !prefs.anyLamp()) {
             RelayStatus.car("차량/조명 선택 필요");
             stopForeground(STOP_FOREGROUND_REMOVE);

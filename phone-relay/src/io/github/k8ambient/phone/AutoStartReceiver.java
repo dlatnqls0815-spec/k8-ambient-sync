@@ -14,8 +14,7 @@ public final class AutoStartReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         DiagLog.init(context);
         Prefs prefs = new Prefs(context);
-        // In ESP32 mode the ESP32 drives the lamps; the phone relay must stay off (one BLE central per lamp).
-        if (prefs.espMode() || !prefs.auto() || prefs.car() == null || !prefs.anyLamp() || RelayStatus.running) return;
+        if (!prefs.auto() || prefs.car() == null || !prefs.anyLamp() || RelayStatus.running) return;
         String action = intent.getAction();
         if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
             BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);

@@ -1,6 +1,6 @@
 # 인수인계 (Codex·Claude 공용)
 
-기준: **2026-11-10**, 브랜치 `codex/device-evidence`(원격 `dlatnqls0815-spec/k8-ambient-sync`, main 병합·강제 Push 금지).
+기준: **2026-11-18**, 브랜치 `codex/device-evidence`(원격 `dlatnqls0815-spec/k8-ambient-sync`, main 병합·강제 Push 금지).
 이 문서를 먼저 읽고 `AGENTS.md` → `docs/PROGRESS.md`(위쪽이 최신) → `docs/DECISIONS.md` 순으로 본다.
 `NEXT_PARKED_VISIT.md`, 예전 `CLAUDE_HANDOFF.md` 내용, PROGRESS 아래쪽은 **지난 기록**이다(A안 GATT 시험 등은 이미 끝남).
 Codex와 Claude 모두 이 프로젝트 폴더에서 작업한다. 동기화와 세션 교대 절차는 [AGENTS.md](../AGENTS.md)를 따른다.
@@ -9,14 +9,14 @@ Codex와 Claude 모두 이 프로젝트 폴더에서 작업한다. 동기화와 
 
 2021 K8 GL3 HEV(Gen5W, Android 4.4.2/API19, NEMESIS 1.16.4)의 순정 앰비언트를 **B안**으로 사제 조명 2개에 동기화하는 데 성공했다:
 차량 NEMESIS 중계(로그 읽기 → 클래식 RFCOMM) → Galaxy 중계 앱 → BLE로 LotusLamp X + Zengge(LEDnetWF).
-A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종료**. C안(ESP32)은 구현됨·실차 확인 전(아래 남은 일 5).
+A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종료**. C안(ESP32)은 2026-11-17~18 실차 시도 후 **철회**(PROGRESS·DECISIONS 2026-11-18).
 
 ## 현재 설치 상태 (실차에서 동작 확인)
 
 | 위치 | 버전 | 산출물 |
 |---|---|---|
-| 차량 NEMESIS `k8ambient.relay` | **0.3.5** | `private/nemesis-relay/k8ambient.relay-0.3.5.zip` |
-| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.4.8** (code 17), 2026-11-14 USB로 설치, 색별 밝기 실차 확인(11-15) | `../../deliverables/k8-ambient-phone-relay-0.4.8.apk` |
+| 차량 NEMESIS `k8ambient.relay` | **0.4.0 설치됨 → 0.4.1로 교체 대기** (0.4.1 = 0.3.5 코드, ESP32 통로 제거) | `private/nemesis-relay/k8ambient.relay-0.4.1.zip` |
+| 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.5.2** (code 20, 내용은 0.4.8과 같음 — ESP32 기능 제거), 2026-11-18 USB 설치 | `../../deliverables/k8-ambient-phone-relay-0.5.2.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
 0.4.6은 시동 직후 차량 재접속 대기(최대 30초)를 없앴다(차량 ACL 연결 시 즉시 재시도). 0.4.5는 시동 뒤 Lotus가 수십 초 반응하지 않던 문제(혼잡 쓰기에 링크를 끊고, 남은 링크에 바로 재연결)를 고쳤다. 시동 재시험은 아직.
@@ -56,10 +56,9 @@ Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠
 2. **직접 고른 색 + 연동 켜짐에서 모드 전환이 안 바뀐다는 사용자 보고**: 기록으로 재현 못 함(그 시간대엔 테마였음). 다시 보이면 시각을 받아 HCI·relay.log 대조.
 3. 에코 "리프레싱 오션"의 정확한 RGB 미확정(테마 `0132019a019e` 색으로 추정). 사용자가 그 테마를 고르면 상태값에서 바로 확인 가능.
 4. 엔진 사운드 앱(0.9.3, "K8 차량" 입력)의 텔레메트리 연결을 실주행에서 확인(`telemetry client connected`).
-5. **ESP32(C안) 구현됨, 실차 미확인 (2026-11-17)**: 보드는 일반 ESP32 WROOM-32D(클래식 BT·BLE). 차량 중계 0.4.0이 두 번째 RFCOMM 서비스
-   "K8 Ambient ESP32"(SPP UUID, 비보안)로 같은 줄을 보내고, ESP32 펌웨어 `esp32/k8amb_esp32/`(0.1.0)가 휴대폰 0.4.8 계산을 그대로 옮겨
-   조명을 BLE로 구동(조명 쓰기 기본 꺼짐), 휴대폰 앱 0.5.0은 "ESP32 모드"에서 설정만 BLE로 넘긴다(기본 꺼짐).
-   설계는 DECISIONS 2026-11-17, 실차 순서는 **[ESP32_FIELD_TEST.md](ESP32_FIELD_TEST.md)**. ESP32 업로드·PC 시리얼/BLE 검사 통과, 휴대폰 0.5.1 설치·설정 전달 확인(11-17). 차량 0.4.0은 설치 전.
+5. **C안 정리 남음**: 차량 중계 0.4.1 설치(ESP32 통로 제거), 헤드유닛 블루투스 목록의 "K8AMB-ESP32" 페어링 삭제
+   (헤드유닛 설정에서 직접, 또는 `removeBond`를 그 이름에만 호출하는 작은 DEX — app_process는 `Looper.prepareMainLooper()`와
+   쓰기 가능한 `ANDROID_DATA` 필요). ESP32 보드는 페어링 기억·차량 주소를 지워 저장해 둠(펌웨어 0.1.2, 저장소에서는 제거).
 6. 정리 후보: 차량의 시험용 BLE 점검 패키지 제거, `relay.log` 크기 제한(현재 무제한 증가), 차량 `persist.service.adb.tcp.enable=1`(무선 AA 충돌 이력, 사용자 판단 대기·임의 변경 금지).
 
 ## 검사·빌드·설치

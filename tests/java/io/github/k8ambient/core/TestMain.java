@@ -888,46 +888,7 @@ public final class TestMain {
         rejects(new Action() { public void run() { SyncEngine.forScaledColor(new MockTransport(), null, 100); } });
     }
 
-    private static void espConfig() {
-        EspConfig.Values v = new EspConfig.Values();
-        v.car = "aa:bb:cc:dd:ee:01";
-        v.zengge = "AA:BB:CC:DD:EE:02";
-        v.fadeMs = 9000;
-        v.hue = new int[] {10, 150, 100, 100, 65, 400};
-        java.util.Map<String, int[]> themes = new java.util.TreeMap<String, int[]>();
-        themes.put("0132019a019e", new int[] {50, 154, 158});
-        themes.put("BAD", new int[] {1, 2, 3});
-        v.themes = themes;
-        List<String> lines = EspConfig.snapshot(v);
-        check(lines.get(0).equals("SET car AA:BB:CC:DD:EE:01"), "ESP32 car address upper case");
-        check(lines.get(1).equals("SET lotus -"), "ESP32 missing lamp is a dash");
-        check(lines.contains("SET order GRB") && lines.contains("SET power 0"), "ESP32 defaults");
-        check(lines.contains("SET fade 5000"), "ESP32 fade clamped");
-        check(lines.contains("SET hue 20,150,100,100,65,300"), "ESP32 hue ratios clamped");
-        check(lines.contains("SET eco 50,154,158") && lines.contains("SET sport 255,0,0"), "ESP32 drive colors");
-        check(lines.contains("THEME 0132019a019e 50,154,158"), "ESP32 theme line");
-        check(!lines.toString().contains("BAD"), "ESP32 skips bad theme keys");
-        check(lines.indexOf("THEMES CLEAR") < lines.indexOf("THEME 0132019a019e 50,154,158"), "ESP32 clears before themes");
-        check(lines.get(lines.size() - 1).equals("SAVE"), "ESP32 snapshot ends in SAVE");
-        for (String line : lines) check(line.length() <= EspConfig.MAX_LINE, "ESP32 line fits");
-        check(!lines.toString().contains("output"), "ESP32 snapshot leaves lamp output alone");
-        check(EspConfig.output(true).equals("SET output 1"), "ESP32 output line");
-        final EspConfig.Values bad = new EspConfig.Values();
-        bad.lotus = "not-an-address";
-        rejects(new Action() { public void run() { EspConfig.snapshot(bad); } });
-        String[] st = EspConfig.parseStatus("ST car connected ch 3");
-        check(st != null && st[0].equals("car") && st[1].equals("connected ch 3"), "ESP32 status parse");
-        check(EspConfig.parseStatus("OK SAVE") == null, "ESP32 non-status line");
-        // Golden lines for the firmware parity check: the eco theme with the link on and ECO stays ocean.
-        String eco = EspGolden.expected("0132019a019e0b0102", 2, false);
-        check(eco.startsWith("CALC 50,154,158,100,1 L "), "ESP32 golden eco " + eco);
-        check(EspGolden.expected("00ff000000000c0101", 0, false).equals("CALC none"), "ESP32 golden unknown brightness");
-        check(EspGolden.expected("00ff00000000010102", 3, false).endsWith(" Z 0,0,0"), "ESP32 golden off is black");
-        check(EspGolden.lines().size() > 200, "ESP32 golden size");
-    }
-
     public static void main(String[] args) {
-        espConfig();
         stateAndRawStatus();
         packets();
         k8ProvisionalBrightness();
