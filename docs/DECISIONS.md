@@ -61,3 +61,31 @@ RGB 일부의 일치로 밝기·전원·초기화까지 일치한다고 판단�
 앱 바이트코드에서 읽은 Lotus 전원 프레임이 실제 조명에서 꺼짐·켜짐으로 동작함을 사용자가 확인했다.
 HCI 대조는 아니지만 동작 근거가 생겼다. 휴대폰 앱의 전원 옵션은 아직 기본 꺼짐으로 두고,
 다음 앱 버전에서 기본 켜짐으로 바꿀지 사용자와 정한다.
+
+## 2026-11-17 — C안 전환: ESP32가 조명 구동, 휴대폰은 설정 전달
+사용자 요청: "ESP32 연결했거든 … 엠비언트라이트 연동을 ESP로 … 휴대폰은 ESP32로 색상및 밝기 어플이 하던 셋팅을 넘겨받는 용도".
+보드는 일반 ESP32 WROOM-32D(CP2102 USB, 클래식 BT·BLE 모두 지원)라 2026-11-08의 S3 제약은 해당하지 않는다.
+
+- **차량 → ESP32: 기존 통로(클래식 RFCOMM) 그대로.** 차량 중계 0.4.0이 기존 휴대폰 서비스("K8 Ambient Relay", 전용 UUID, 보안 연결)는
+  유지하고, 같은 줄 프로토콜(`K8AMB 1`, `SML`, `MODE`, `ALERT`, `PING`)을 두 번째 서비스 **"K8 Ambient ESP32"**로도 보낸다.
+  - UUID는 표준 SPP `00001101-…`: ESP32(Arduino BluetoothSerial/IDF)의 SDP 탐색은 SPP UUID 레코드만 찾는다. 이름으로 우리 서비스를 고르고,
+    연결 직후 `K8AMB 1` 인사가 없으면 다른 채널로 넘어간다. 수동 채널 지정(`SET carch n`, 시리얼 전용)도 둔다.
+  - **비보안(insecure) 서비스**: 헤드유닛에는 휴대폰이 아닌 기기를 페어링할 흐름이 없을 가능성이 크다. 이 통로는 읽기 전용 상태만 보내고
+    명령을 받지 않으므로 본딩 없이 연다. 헤드유닛 스택(bplus)이 비보안 서버·SPP UUID 레코드·두 번째 ACL을 허용하는지는 **실차 미확인**.
+  - 차량 명령은 여전히 없다. 차량 쪽 변경은 중계 패키지 설치뿐(사용자 승인 후).
+  - Wi-Fi·USB 시리얼 대안은 헤드유닛 쪽에 새 통로(핫스팟/USB 호스트 권한)가 필요해 기존 근거가 있는 RFCOMM을 택했다.
+- **ESP32 → 조명: BLE 중앙(central).** 휴대폰 0.4.8의 계산(K8LotusMapping·DriveModeLight·ColorTone·HueBrightness·Fader·SyncEngine·
+  Lotus/Zengge 프레임, 경고·복귀 페이드)을 C++(`esp32/k8amb_esp32/k8core.*`)로 그대로 옮겼다. 같은 입력에 같은 결과인지
+  Java 코어가 만든 기대값(`EspGolden`)과 보드의 `CALC` 응답을 비교한다(`tools/esp32_serial_check.py`).
+  - **조명 쓰기는 기본 꺼짐(`output 0`)**: 이때 프레임은 USB 시리얼에 `TX lotus|zengge <hex>`로만 찍힌다. 조명 BLE 쓰기 시험은
+    사용자 승인 후 휴대폰의 "ESP32가 조명에 실제로 쓰기" 또는 시리얼 `SET output 1`로 켠다.
+  - 조명은 한 번에 한 중앙만 받으므로 ESP32 모드에서 휴대폰 중계는 시작하지 않는다(자동 시작 포함).
+- **휴대폰 → ESP32: BLE GATT 설정 서비스.** ESP32가 "K8AMB-ESP32"로 광고, 서비스 `6b38a0d2-…-2e8f71c3b9e0`,
+  쓰기 `…b9e1`(한 줄 한 쓰기, 응답 있는 쓰기), 알림 `…b9e2`(`OK`/`ERR`/`CFG`/`ST` 줄). 휴대폰은 MTU 247을 요청한다.
+  - 줄: `SET car|lotus|zengge <주소|->`, `SET order GRB`, `SET power 0|1`, `SET fade|gamma|red|green|blue|lotusMax|zenggeMax <n>`,
+    `SET hue a,b,c,d,e,f`, `SET eco|sport r,g,b`, `THEMES CLEAR`, `THEME <12hex> r,g,b|-`, `SAVE`, `SET output 0|1`, `GET`, `STATUS`.
+    형식은 core `EspConfig`(테스트 포함)가 만들고 ESP32가 범위를 다시 검사한다. `SAVE`에서 NVS에 저장(설정 글 그대로).
+  - 휴대폰 앱 0.5.0: "ESP32 모드"(기본 꺼짐 — 업데이트만으로 지금 되는 B안이 깨지지 않게), ESP32 찾기, 설정 자동 전달(슬라이더·색·테마·조명 선택 변경 시),
+    ESP32 상태 표시(차량 연결·조명·현재 테마 키). 테마 색 지정은 ESP32가 보고한 현재 테마 키를 쓴다.
+  - 설정 서비스는 인증이 없다(근처의 누구나 색 설정을 바꿀 수 있음). 위험이 조명 색에 한정돼 첫 버전은 그대로 두고 실차 확인 후 재검토.
+- 같은 USB 시리얼 줄로 PC에서 모든 기능을 확인한다: `SML/MODE/ALERT` 모의 입력(시리얼 전용), `CALC`, `STATUS`, `GET`.

@@ -1,5 +1,21 @@
 # 진행 상황
 
+## C안 ESP32 연동 구현 — 2026-11-17 (Claude, 빌드만, 업로드·설치·실차 확인 전)
+
+- 사용자 요청: ESP32를 연결했으니 앰비언트 연동을 ESP32가 하고, 휴대폰은 색·밝기 설정을 넘기는 용도로만. 설계는 DECISIONS 2026-11-17.
+- 차량 중계 0.4.0(`CarRelay`): 기존 휴대폰 서비스 유지 + 두 번째 RFCOMM 서비스 "K8 Ambient ESP32"(SPP UUID, 비보안).
+  로그 `esp32 listening/connected/disconnected`. `private/nemesis-relay/k8ambient.relay-0.4.0.zip`, 설치 전.
+- ESP32 펌웨어 0.1.0(`esp32/k8amb_esp32/`, Arduino esp32 코어 3.3.12, `PartitionScheme=huge_app`): 컴파일 통과(플래시 36%, RAM 13%).
+  `k8core.*`가 Java 코어(매핑·드라이브 모드·톤·색별 밝기·페이드·SyncEngine·프레임)를 옮김. 차량 SPP 접속(이름으로 채널 선택, `K8AMB 1` 확인,
+  30초 무응답 재접속), 조명 BLE 중앙, 휴대폰용 BLE 설정 서비스, NVS 저장. **조명 쓰기 기본 꺼짐**(시리얼에 `TX` 줄만).
+  시리얼 명령: HELLO, STATUS, GET, SET…, THEME…, SAVE, DEFAULTS, CALC, 모의 SML/MODE/ALERT, REBOOT.
+- core `EspConfig`(설정 줄 생성, 테스트 포함), `EspGolden`(보드 계산 비교 기대값), `tools/esp32_serial_check.py`(PC 시리얼 검사).
+- 휴대폰 0.5.0(code 18): "ESP32 모드"(기본 꺼짐), ESP32 찾기, 설정 자동 전달, 상태 표시, 조명 쓰기 체크박스. ESP32 모드에선 휴대폰 중계·자동 시작 안 함.
+  `private/phone-relay/k8-ambient-phone-relay.apk` 빌드만, 설치 전.
+- 검사: check.py 통과(코어 389, Python 90·1 건너뜀, host 14, 진단 37, probe 24, API19 컴파일).
+- 미확인: 보드 업로드·시리얼 검사(PC의 CP2102 드라이버 미설치로 COM 포트 없음 — 관리자 설치 필요), 앱→ESP32 실제 BLE 전달,
+  헤드유닛이 비보안 SPP 서버·두 번째 ACL을 받는지, ESP32의 조명 BLE 쓰기. 실차 순서는 `docs/ESP32_FIELD_TEST.md`.
+
 ## 색별 밝기 보정 — 2026-11-14 (Claude, 휴대폰 0.4.8 설치, 2026-11-15 사용자 실차 확인: 잘 됨)
 
 - 사용자 요청: 색마다 사제 조명 밝기 차이가 있어 통일하고 싶음. 따뜻한 색은 약 30%, 빨강·파랑·보라는 약 13%(Lotus 최대 20% 기준).

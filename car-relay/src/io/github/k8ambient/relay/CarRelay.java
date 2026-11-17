@@ -30,6 +30,16 @@ import java.util.regex.Pattern;
  * same log on a second RFCOMM service for the phone engine-sound app; see {@link TelemetryProtocol}.
  */
 public final class CarRelay {
+    static final String PHONE_NAME = "K8 Ambient Relay";
+    /**
+     * Since 0.4.0 the same ambient stream is also served to the ESP32 (plan C), which drives the
+     * lamps itself. The ESP32 SPP client finds RFCOMM channels by the standard Serial Port UUID
+     * only, so this second service uses that UUID with its own name (the ESP32 picks it by name).
+     * It is insecure (no bonding) because the head unit has no pairing flow for a non-phone device;
+     * the stream is read-only status and the server accepts no commands.
+     */
+    static final String ESP32_NAME = "K8 Ambient ESP32";
+    static final java.util.UUID ESP32_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
     private static final long PING_MS = 10000, RETRY_MS = 5000;
     /** The relay starts well within this time after ignition; a later start is an update or restart. */
     private static final long FRESH_BOOT_MS = 4 * 60 * 1000;
@@ -88,7 +98,8 @@ public final class CarRelay {
         relay.restoreFromOwnLog(new File(RECORD_DIR, "relay.log"),
                 android.os.SystemClock.elapsedRealtime() < FRESH_BOOT_MS);
         start(new Runnable() { public void run() { relay.readLog(); } }, "sml-log");
-        start(new Runnable() { public void run() { relay.serve(); } }, "rfcomm");
+        start(new Runnable() { public void run() { relay.serve(PHONE_NAME, RelayProtocol.SERVICE_UUID, false); } }, "rfcomm");
+        start(new Runnable() { public void run() { relay.serve(ESP32_NAME, ESP32_UUID, true); } }, "rfcomm-esp32");
         start(new Runnable() { public void run() { relay.serveTelemetry(); } }, "telemetry");
         start(new Runnable() { public void run() { record(); } }, "recorder");
         log("started " + RelayProtocol.HELLO);
@@ -385,7 +396,14 @@ public final class CarRelay {
         }
     }
 
-    private void serve() {
+    /**
+     * One ambient RFCOMM service, one client at a time. The phone and the ESP32 services run side by
+     * side and stream the same state. Log words stay "phone" for the phone service (older notes and
+     * scripts look for "phone connected"); the ESP32 service logs "esp32 ...".
+     */
+    private void serve(String name, java.util.UUID uuid, boolean insecure) {
+        String who = insecure ? "esp32 " : "";
+        String client = insecure ? "esp32" : "phone";
         while (true) {
             BluetoothServerSocket server = null;
             try {
@@ -394,23 +412,24 @@ public final class CarRelay {
                     sleep(RETRY_MS);
                     continue;
                 }
-                server = adapter.listenUsingRfcommWithServiceRecord("K8 Ambient Relay", RelayProtocol.SERVICE_UUID);
-                log("listening");
+                server = insecure ? adapter.listenUsingInsecureRfcommWithServiceRecord(name, uuid)
+                        : adapter.listenUsingRfcommWithServiceRecord(name, uuid);
+                log(who + "listening");
                 while (true) {
-                    BluetoothSocket client = server.accept();
-                    log("phone connected");
+                    BluetoothSocket socket = server.accept();
+                    log(client + " connected");
                     try {
-                        stream(client.getOutputStream());
+                        stream(socket.getOutputStream());
                     } catch (IOException error) {
-                        log("phone disconnected");
+                        log(client + " disconnected");
                     } finally {
-                        try { client.close(); } catch (IOException ignored) { }
+                        try { socket.close(); } catch (IOException ignored) { }
                     }
                 }
             } catch (IOException error) {
-                log("server error " + error.getClass().getSimpleName());
+                log(who + "server error " + error.getClass().getSimpleName());
             } catch (RuntimeException error) {
-                log("server error " + error.getClass().getSimpleName());
+                log(who + "server error " + error.getClass().getSimpleName());
             } finally {
                 if (server != null) try { server.close(); } catch (IOException ignored) { }
             }
