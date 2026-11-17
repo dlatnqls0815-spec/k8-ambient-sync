@@ -1,6 +1,6 @@
 # 진행 상황
 
-## C안 ESP32 연동 구현 — 2026-11-17 (Claude, 빌드만, 업로드·설치·실차 확인 전)
+## C안 ESP32 연동 구현 — 2026-11-17 (Claude, ESP32 업로드·PC 검사 통과, 휴대폰 설치·실차 확인 전)
 
 - 사용자 요청: ESP32를 연결했으니 앰비언트 연동을 ESP32가 하고, 휴대폰은 색·밝기 설정을 넘기는 용도로만. 설계는 DECISIONS 2026-11-17.
 - 차량 중계 0.4.0(`CarRelay`): 기존 휴대폰 서비스 유지 + 두 번째 RFCOMM 서비스 "K8 Ambient ESP32"(SPP UUID, 비보안).
@@ -13,8 +13,11 @@
 - 휴대폰 0.5.0(code 18): "ESP32 모드"(기본 꺼짐), ESP32 찾기, 설정 자동 전달, 상태 표시, 조명 쓰기 체크박스. ESP32 모드에선 휴대폰 중계·자동 시작 안 함.
   `private/phone-relay/k8-ambient-phone-relay.apk` 빌드만, 설치 전.
 - 검사: check.py 통과(코어 389, Python 90·1 건너뜀, host 14, 진단 37, probe 24, API19 컴파일).
-- 미확인: 보드 업로드·시리얼 검사(PC의 CP2102 드라이버 미설치로 COM 포트 없음 — 관리자 설치 필요), 앱→ESP32 실제 BLE 전달,
-  헤드유닛이 비보안 SPP 서버·두 번째 ACL을 받는지, ESP32의 조명 BLE 쓰기. 실차 순서는 `docs/ESP32_FIELD_TEST.md`.
+- PC 확인(같은 날): CP210x 드라이버(Silicon Labs 11.6.0.420) 설치 후 보드 업로드(해시 확인).
+  `tools/esp32_serial_check.py`: 계산 232/232가 Java 코어와 같음, 앱 설정 18줄 적용·재부팅 후 유지, 범위 밖 값 거부, 모의 흐름 TARGET 7·드라이런 프레임 83.
+  `tools/esp32_ble_check.py`(새, PC 블루투스로 앱과 같은 GATT 경로): 광고 발견, MTU 247, HELLO/STATUS/GET, 설정 16줄 쓰기 모두 OK·SAVE.
+  빈 힙은 약 72~77KB(조명 BLE 연결 전). 휴대폰 APK는 `deliverables/k8-ambient-phone-relay-0.5.0.apk`.
+- 미확인: 휴대폰 앱 0.5.0의 실제 전달(휴대폰이 PC에 연결돼 있지 않음 — 같은 줄·같은 GATT 경로는 PC로 확인), 헤드유닛이 비보안 SPP 서버·두 번째 ACL을 받는지, ESP32의 조명 BLE 쓰기. 실차 순서는 `docs/ESP32_FIELD_TEST.md`.
 
 ## 색별 밝기 보정 — 2026-11-14 (Claude, 휴대폰 0.4.8 설치, 2026-11-15 사용자 실차 확인: 잘 됨)
 

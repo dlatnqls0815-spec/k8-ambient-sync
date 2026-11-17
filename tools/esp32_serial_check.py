@@ -65,11 +65,10 @@ def java_golden(jdk):
     java = Path(jdk) / "bin" / ("java.exe" if os.name == "nt" else "java")
     out = Path(tempfile.mkdtemp(prefix="espgold-", dir=ROOT / "build"))
     sources = list((ROOT / "core/src").rglob("*.java")) + [ROOT / "tests/java/io/github/k8ambient/core/EspGolden.java"]
-    args = out / "sources.txt"
-    args.write_text("\n".join('"%s"' % p.as_posix() for p in sources), encoding="utf-8")
-    subprocess.run([str(javac), "-encoding", "UTF-8", "-d", str(out), "@" + str(args)], check=True)
+    # Sources on the command line: javac reads an @argfile in the platform charset (breaks non-ASCII paths).
+    subprocess.run([str(javac), "-encoding", "UTF-8", "-d", str(out)] + [str(p) for p in sources], check=True)
     text = subprocess.check_output([str(java), "-cp", str(out), "io.github.k8ambient.core.EspGolden"], text=True)
-    return [line.split("\t") for line in text.splitlines() if line.strip()]
+    return [line.split("\t") for line in text.splitlines() if line.strip()], out
 
 
 def java_snapshot(jdk, classes):

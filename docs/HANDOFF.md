@@ -59,7 +59,7 @@ Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠
 5. **ESP32(C안) 구현됨, 실차 미확인 (2026-11-17)**: 보드는 일반 ESP32 WROOM-32D(클래식 BT·BLE). 차량 중계 0.4.0이 두 번째 RFCOMM 서비스
    "K8 Ambient ESP32"(SPP UUID, 비보안)로 같은 줄을 보내고, ESP32 펌웨어 `esp32/k8amb_esp32/`(0.1.0)가 휴대폰 0.4.8 계산을 그대로 옮겨
    조명을 BLE로 구동(조명 쓰기 기본 꺼짐), 휴대폰 앱 0.5.0은 "ESP32 모드"에서 설정만 BLE로 넘긴다(기본 꺼짐).
-   설계는 DECISIONS 2026-11-17, 실차 순서는 **[ESP32_FIELD_TEST.md](ESP32_FIELD_TEST.md)**. 0.4.0·0.5.0은 빌드만 됐고 설치 전.
+   설계는 DECISIONS 2026-11-17, 실차 순서는 **[ESP32_FIELD_TEST.md](ESP32_FIELD_TEST.md)**. ESP32 업로드·PC 시리얼/BLE 검사 통과(11-17). 차량 0.4.0·휴대폰 0.5.0(`deliverables/`)은 설치 전.
 6. 정리 후보: 차량의 시험용 BLE 점검 패키지 제거, `relay.log` 크기 제한(현재 무제한 증가), 차량 `persist.service.adb.tcp.enable=1`(무선 AA 충돌 이력, 사용자 판단 대기·임의 변경 금지).
 
 ## 검사·빌드·설치

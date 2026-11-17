@@ -9,8 +9,9 @@
 |---|---|
 | 펌웨어 빌드 | `arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=huge_app esp32/k8amb_esp32` (esp32 코어 3.3.12) |
 | 업로드 | `arduino-cli upload -p COMx --fqbn esp32:esp32:esp32:PartitionScheme=huge_app esp32/k8amb_esp32` (CP210x 드라이버 필요) |
-| PC 시리얼 검사 | `python tools/esp32_serial_check.py --port COMx --jdk <JDK17>` → `ESP32 serial check: passed` (Java 코어와 계산 일치, 설정 저장·재부팅 유지, 모의 신호 흐름) |
+| PC 시리얼 검사 | `python tools/esp32_serial_check.py --port COMx --jdk <JDK17>` → `ESP32 serial check: passed`, 2026-11-17 통과 (Java 코어와 계산 일치, 설정 저장·재부팅 유지, 모의 신호 흐름) |
 | 휴대폰 앱 0.5.0 설치 | `adb -s <serial> install -r private/phone-relay/k8-ambient-phone-relay.apk` (사용자 승인 후) |
+| PC BLE 설정 경로 | `python tools/esp32_ble_check.py` → `ESP32 BLE check: passed` (2026-11-17 통과) |
 | 앱→ESP32 설정 전달 | 앱에서 "ESP32 모드" 켜기 → "ESP32 찾기" → 선택 → 토스트 "ESP32에 설정 전달 완료", 앱의 ESP32 상태에 펌웨어 `0.1.0`. ESP32 시리얼에 `PHONE SET …` 줄 |
 
 차량 주소(`SET car`)는 휴대폰 앱이 이미 저장한 차량 주소를 그대로 넘긴다. 조명 주소도 같다.
