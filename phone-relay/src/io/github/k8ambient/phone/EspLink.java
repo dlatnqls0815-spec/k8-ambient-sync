@@ -126,7 +126,13 @@ final class EspLink {
     List<String> exchange(String target, List<String> lines, final String until, long waitMs) throws IOException {
         if (target == null) throw new IOException("ESP32 미선택");
         try {
-            open(target);
+            try {
+                open(target);
+            } catch (IOException first) {
+                // The first GATT connect right after a scan often fails on Samsung (status 133); one retry.
+                try { Thread.sleep(800); } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw first; }
+                open(target);
+            }
             synchronized (lock) { replies.clear(); }
             for (String line : lines) {
                 BluetoothGatt current;
