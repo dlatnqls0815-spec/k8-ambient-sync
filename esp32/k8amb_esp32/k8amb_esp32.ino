@@ -22,7 +22,7 @@
 
 struct Out;  // used by the generated prototypes
 
-static const char* FW_VERSION = "0.1.0";
+static const char* FW_VERSION = "0.1.2";
 static const char* DEVICE_NAME = "K8AMB-ESP32";
 static const char* CFG_SERVICE = "6b38a0d2-4f7e-4c1b-9d5a-2e8f71c3b9e0";
 static const char* CFG_RX = "6b38a0d2-4f7e-4c1b-9d5a-2e8f71c3b9e1";
@@ -35,6 +35,9 @@ static const int K8_LINE_MAX = 128;
 static k8::Settings gSettings;           // written only by the main loop
 static SemaphoreHandle_t gLock;          // guards gSettings copies, gPost, status strings
 static volatile uint32_t gReloadVer = 1, gRebuildVer = 1, gCarVer = 1;
+static volatile uint32_t gPairNumber = 0;
+static volatile bool gPairPending = false;
+static volatile int gPairResult = 0;  // 1 bonded, 2 failed
 static int gCarChannel = 0;              // 0 = by SDP name; serial "SET carch n" for a fixed channel
 
 struct Post {
@@ -239,7 +242,7 @@ static void lampTask(void* arg) {
 }
 
 // ---------------------------------------------------------------- car link task
-static bool readLine(char* buf, int& len, uint32_t waitMs) {
+static bool readLine(char* buf, int& len, uint32_t waitMs, bool checkLink = true) {
     uint32_t until = millis() + waitMs;
     while ((int32_t)(until - millis()) > 0) {
         while (SerialBT.available()) {
@@ -250,7 +253,7 @@ static bool readLine(char* buf, int& len, uint32_t waitMs) {
             }
             if (c != '\r' && len < K8_LINE_MAX - 1) buf[len++] = (char)c;
         }
-        if (!SerialBT.connected(0)) return false;
+        if (checkLink && !SerialBT.connected(0)) return false;
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     return false;
@@ -266,15 +269,28 @@ static void postLine(const char* text, uint8_t source) {
 
 /** Connects to one channel and checks the relay greeting. */
 static bool tryChannel(const BTAddress& address, int channel) {
-    char text[64];
+    char text[112];
     snprintf(text, sizeof(text), "채널 %d 연결 중", channel);
     setStatus(gCarStatus, sizeof(gCarStatus), text);
     // Insecure: the relay's ESP32 service needs no bonding (the head unit has no pairing flow for us).
-    if (!SerialBT.connect(address, channel, ESP_SPP_SEC_NONE, ESP_SPP_ROLE_MASTER)) return false;
+    // BluetoothSerial keeps one client handle and drops any new link while an old one is recorded (a late open of a
+    // timed-out attempt). Clear it before and after each attempt.
+    if (SerialBT.hasClient()) {
+        SerialBT.disconnect();
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    if (!SerialBT.connect(address, channel, ESP_SPP_SEC_NONE, ESP_SPP_ROLE_MASTER)) {
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        if (SerialBT.hasClient()) SerialBT.disconnect();
+        logLine("car connect timed out");
+        return false;
+    }
     char line[K8_LINE_MAX];
     int len = 0;
-    if (readLine(line, len, 4000) && strcmp(line, "K8AMB 1") == 0) return true;
-    snprintf(text, sizeof(text), "car channel %d is not the relay", channel);
+    bool got = readLine(line, len, 4000, false);  // link flag not trusted, see carTask
+    if (got && strcmp(line, "K8AMB 1") == 0) return true;
+    line[len < 24 ? len : 24] = 0;
+    snprintf(text, sizeof(text), "car channel %d: no greeting (%s, %d bytes: %s)", channel, got ? "line" : "timeout", len, line);
     logLine(text);
     SerialBT.disconnect();
     return false;
@@ -333,14 +349,16 @@ static void carTask(void*) {
         char line[K8_LINE_MAX];
         int len = 0;
         uint32_t lastLine = millis();
+        // The link state flag is not trusted here: a late close event of an earlier attempt (SDP probe or a wrong
+        // channel) clears it while this link is up (seen in the car 2026-11-18: dropped right after the first lines).
+        // The relay pings every 10 s, so silence is the disconnect signal.
         while (gCarVer == carVer) {
-            if (readLine(line, len, 200)) {
+            if (readLine(line, len, 200, false)) {
                 lastLine = millis();
                 postLine(line, 0);
                 len = 0;
                 continue;
             }
-            if (!SerialBT.connected(0)) break;
             if (millis() - lastLine > LINK_TIMEOUT_MS) {
                 logLine("car silent, reconnect");
                 break;
@@ -672,6 +690,9 @@ static void command(const char* raw, Out& out, bool fromSerial) {
     } else if (fromSerial && (!strncmp(line, "SML ", 4) || !strncmp(line, "MODE ", 5) || !strncmp(line, "ALERT ", 6))) {
         postLine(line, 2);  // simulated relay line, handled like the car's
         out.line("OK SIM");
+    } else if (fromSerial && !strcmp(line, "UNPAIR")) {
+        SerialBT.deleteAllBondedDevices();  // rollback: forget the head unit bond
+        out.line("OK UNPAIR");
     } else if (!strcmp(line, "REBOOT")) {
         out.line("OK REBOOT");
         delay(200);
@@ -742,7 +763,12 @@ void setup() {
     loadSettings();
     startBle();
     // Classic SPP client (master) to the car relay; BLE stays enabled (disableBLE = false).
-    SerialBT.enableSSP(false, false);  // no display/keyboard: Just Works if the head unit asks
+    // The head unit auto-rejects Just Works pairing ("Auto-reject JustWorks pairing unconditionally") and asks for
+    // pairing on every link, so offer display + yes/no: numeric comparison, confirmed on the head unit screen once.
+    // The ESP32 side confirms by itself (no screen); the number is printed on serial for comparison.
+    SerialBT.enableSSP(true, true);
+    SerialBT.onConfirmRequest([](uint32_t number) { gPairNumber = number; gPairPending = true; });
+    SerialBT.onAuthComplete([](boolean ok) { gPairResult = ok ? 1 : 2; });
     if (!SerialBT.begin(DEVICE_NAME, true, false)) logLine("classic BT start failed");
     xTaskCreatePinnedToCore(carTask, "car", 6144, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(lampTask, "lotus", 6144, (void*)0, 2, nullptr, 1);
@@ -756,6 +782,17 @@ static int gSerialLen = 0;
 void loop() {
     static SerialOut serialOut;
     static BleOut bleOut;
+    if (gPairPending) {
+        gPairPending = false;
+        char text[64];
+        snprintf(text, sizeof(text), "pairing number %06lu (confirm on the head unit)", (unsigned long)gPairNumber);
+        logLine(text);
+        SerialBT.confirmReply(true);
+    }
+    if (gPairResult) {
+        logLine(gPairResult == 1 ? "pairing done (bonded)" : "pairing failed");
+        gPairResult = 0;
+    }
     while (Serial.available()) {
         int c = Serial.read();
         if (c == '\n') {
