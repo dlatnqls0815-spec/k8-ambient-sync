@@ -15,7 +15,7 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 
 | 위치 | 버전 | 산출물 |
 |---|---|---|
-| 차량 NEMESIS `k8ambient.relay` | **0.4.0 설치됨 → 0.4.1로 교체 대기** (0.4.1 = 0.3.5 코드, ESP32 통로 제거) | `private/nemesis-relay/k8ambient.relay-0.4.1.zip` |
+| 차량 NEMESIS `k8ambient.relay` | **0.4.1** (0.3.5 코드, 2026-11-18 01:34 설치) | `private/nemesis-relay/k8ambient.relay-0.4.1.zip` |
 | 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.5.2** (code 20, 내용은 0.4.8과 같음 — ESP32 기능 제거), 2026-11-18 USB 설치 | `../../deliverables/k8-ambient-phone-relay-0.5.2.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
@@ -56,9 +56,7 @@ Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠
 2. **직접 고른 색 + 연동 켜짐에서 모드 전환이 안 바뀐다는 사용자 보고**: 기록으로 재현 못 함(그 시간대엔 테마였음). 다시 보이면 시각을 받아 HCI·relay.log 대조.
 3. 에코 "리프레싱 오션"의 정확한 RGB 미확정(테마 `0132019a019e` 색으로 추정). 사용자가 그 테마를 고르면 상태값에서 바로 확인 가능.
 4. 엔진 사운드 앱(0.9.3, "K8 차량" 입력)의 텔레메트리 연결을 실주행에서 확인(`telemetry client connected`).
-5. **C안 정리 남음**: 차량 중계 0.4.1 설치(ESP32 통로 제거), 헤드유닛 블루투스 목록의 "K8AMB-ESP32" 페어링 삭제
-   (헤드유닛 설정에서 직접, 또는 `removeBond`를 그 이름에만 호출하는 작은 DEX — app_process는 `Looper.prepareMainLooper()`와
-   쓰기 가능한 `ANDROID_DATA` 필요). ESP32 보드는 페어링 기억·차량 주소를 지워 저장해 둠(펌웨어 0.1.2, 저장소에서는 제거).
+5. C안(ESP32)은 철회·정리 끝(차량 0.4.1, 휴대폰 0.5.2, 헤드유닛 ESP32 페어링 삭제). 근거는 PROGRESS·DECISIONS 2026-11-18.
 6. 정리 후보: 차량의 시험용 BLE 점검 패키지 제거, `relay.log` 크기 제한(현재 무제한 증가), 차량 `persist.service.adb.tcp.enable=1`(무선 AA 충돌 이력, 사용자 판단 대기·임의 변경 금지).
 
 ## 검사·빌드·설치
