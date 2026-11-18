@@ -37,7 +37,7 @@ COMMANDS = [
     ("logcat_wifi", ["logcat", "-d", "-v", "time"]),
 ]
 PROP_KEEP = re.compile(r"(?i)^\[(wifi|wlan|init\.svc\.(wpa|hostapd|dhcp|dnsmasq|adbd)|service\.adb|"
-                       r"persist\.service\.adb|persist\.sys\.(wifi|softap)|net\.|dhcp\.|sys\.boot_completed|"
+                       r"persist\.service\.adb|persist\.adb|persist\.sys\.(wifi|softap)|net\.|dhcp\.|sys\.boot_completed|"
                        r"ro\.(wifi|build\.product))")
 
 

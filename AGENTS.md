@@ -30,6 +30,9 @@ B안은 실차에서 동작이 확인됐다. 최신 빌드의 설치 여부와 �
 - HMG-API와 HMG-Seogaemo를 혼합 설치하지 않는다. 조사한 외부 스크립트를 실행하지 않는다.
 - VIN, 실제 장치 식별자, 인증/페어링 키, 원본 로그·펌웨어·바이너리는 커밋하지 않는다.
 - `.research/`, `.tools/`, `captures/`, `private/`, `work/`는 로컬 전용이다.
-- 외부 자문은 MiniMax만 허용. 필요 시 사용자 홈의 `.codex/skills/minimax/SKILL.md`를 읽는다.
-  비밀/실제 로그/저장소 전체를 외부 AI에 보내지 않는다. Codex가 편집·검증·판단한다.
+- 외부 자문은 MiniMax, GPT(코덱스), Gemini(안티그래비티) 모두 허용. GPT·Gemini는 `C:\AI 통합\ai-worker.ps1` 래퍼로 부른다
+  (`-Worker codex|agy`, `-WorkDir` 지정, `-Access read` 권장). MiniMax는 사용자 홈의 `.codex/skills/minimax/SKILL.md`를 읽는다.
+  `private/`, 원본 로그·APK·서명키, VIN·MAC·IP·페어링 키와 저장소 전체는 외부 AI에 보내지 않는다.
+  작업 폴더는 커밋된 `docs/`처럼 공개해도 되는 곳이나 빈 폴더로 지정하고, 외부 AI가 `private/`를 읽을 수 있는 작업은 먼저 사용자에게 묻는다.
+  편집·검증·판단은 현재 세션을 맡은 도구(Codex 또는 Claude)가 한다.
 - Codex 로그인, 모델, provider, MCP와 다른 프로젝트 설정을 변경하지 않는다.
