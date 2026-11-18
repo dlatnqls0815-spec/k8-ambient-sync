@@ -888,7 +888,31 @@ public final class TestMain {
         rejects(new Action() { public void run() { SyncEngine.forScaledColor(new MockTransport(), null, 100); } });
     }
 
+    private static void wifiKeeperPolicy() {
+        final Boolean on = Boolean.TRUE, off = Boolean.FALSE;
+        check(WifiKeeperPolicy.decide(off, false, 0, false) == WifiKeeperPolicy.Decision.ENABLE, "wifi off, no AP: enable");
+        check(WifiKeeperPolicy.decide(on, false, 0, false) == WifiKeeperPolicy.Decision.ALREADY_ON, "wifi already on");
+        check(WifiKeeperPolicy.decide(off, true, 0, false) == WifiKeeperPolicy.Decision.YIELD_TO_AP, "car hotspot running: yield");
+        check(WifiKeeperPolicy.decide(on, true, 0, false) == WifiKeeperPolicy.Decision.YIELD_TO_AP, "hotspot wins even if wifi_on reads 1");
+        check(WifiKeeperPolicy.decide(null, false, 0, false) == WifiKeeperPolicy.Decision.STATE_UNKNOWN, "unreadable state: no action");
+        check(WifiKeeperPolicy.decide(off, false, WifiKeeperPolicy.MAX_ENABLES, false) == WifiKeeperPolicy.Decision.LIMIT_REACHED, "enable limit");
+        check(WifiKeeperPolicy.decide(off, false, WifiKeeperPolicy.MAX_ENABLES - 1, false) == WifiKeeperPolicy.Decision.ENABLE, "last allowed enable");
+        check(WifiKeeperPolicy.decide(off, false, 0, true) == WifiKeeperPolicy.Decision.DISABLED, "kill switch");
+        check(WifiKeeperPolicy.decide(off, true, 0, true) == WifiKeeperPolicy.Decision.DISABLED, "kill switch beats hotspot");
+        check(WifiKeeperPolicy.parseWifiOn("1\n") == Boolean.TRUE && WifiKeeperPolicy.parseWifiOn(" 0 ") == Boolean.FALSE, "wifi_on parse");
+        check(WifiKeeperPolicy.parseWifiOn("null") == null && WifiKeeperPolicy.parseWifiOn("") == null
+                && WifiKeeperPolicy.parseWifiOn(null) == null && WifiKeeperPolicy.parseWifiOn("2") == null, "wifi_on unknown values");
+        String idle = "USER PID PPID VSIZE RSS WCHAN PC NAME\nwifi 4529 1 3764 2176 ffffffff 00000000 S /system/bin/wpa_supplicant\n"
+                + "dhcp 4559 1 1080 388 ffffffff 00000000 S /system/bin/dhcpcd\n";
+        check(!WifiKeeperPolicy.hasAccessPoint(idle), "no hostapd in the observed car listing");
+        check(WifiKeeperPolicy.hasAccessPoint(idle + "wifi 5000 1 3000 1000 ffffffff 00000000 S /system/bin/hostapd\n"), "hostapd found");
+        check(!WifiKeeperPolicy.hasAccessPoint("wifi 1 1 1 1 f 0 S com.example.hostapd_helper\n") && !WifiKeeperPolicy.hasAccessPoint(null),
+                "similar names and null are not a hotspot");
+        check(WifiKeeperPolicy.SETTLE_SECONDS > 0 && WifiKeeperPolicy.WINDOW_SECONDS >= WifiKeeperPolicy.POLL_SECONDS * 2, "window sanity");
+    }
+
     public static void main(String[] args) {
+        wifiKeeperPolicy();
         stateAndRawStatus();
         packets();
         k8ProvisionalBrightness();

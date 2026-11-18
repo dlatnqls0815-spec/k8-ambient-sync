@@ -15,7 +15,7 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 
 | 위치 | 버전 | 산출물 |
 |---|---|---|
-| 차량 NEMESIS `k8ambient.relay` | **0.4.1** (0.3.5 코드, 2026-11-18 01:34 설치) | `private/nemesis-relay/k8ambient.relay-0.4.1.zip` |
+| 차량 NEMESIS `k8ambient.relay` | **0.4.2** (0.3.5 코드 + 시동 시 Wi-Fi 자동 켜기, 2026-11-18 23:49 설치, 시동 후 동작 미확인). 롤백: 커밋 4459f46에서 0.4.1 재빌드 | `private/nemesis-relay/k8ambient.relay-0.4.2.zip` |
 | 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.5.2** (code 20, 내용은 0.4.8과 같음 — ESP32 기능 제거), 2026-11-18 USB 설치 | `../../deliverables/k8-ambient-phone-relay-0.5.2.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.

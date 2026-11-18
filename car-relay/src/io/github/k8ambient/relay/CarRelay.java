@@ -22,6 +22,9 @@ import java.util.regex.Pattern;
  * latest raw status over a classic Bluetooth RFCOMM server to one bonded phone. It sends no
  * vehicle, MICOM or lighting commands and never changes Bluetooth state.
  *
+ * <p>Since 0.4.2 (package; code line 0.3.6) {@link WifiKeeper} also switches the head unit's built-in Wi-Fi on
+ * after boot and ignition, unless the car's own hotspot runs.
+ *
  * <p>Since 0.2.0 it also records, read-only, the head unit's own log lines that may explain the
  * factory overspeed red/blink ambient effect (navigation cluster info, MICOM frames, SML, speed and
  * camera lines) into a rotating file next to the relay log, for offline analysis.
@@ -58,6 +61,8 @@ public final class CarRelay {
     private boolean ignitionOff;
     /** Log time of day (ms) of the last ignition on, -1 if none (read-log thread only). */
     private long ignitionOnAt = -1;
+    /** Switches the built-in Wi-Fi on after boot and ignition (see {@link WifiKeeper}). */
+    private final WifiKeeper wifiKeeper = new WifiKeeper();
     private static final int MODE_SMART = 0x06;
     private static final long IGNITION_SETTLE_MS = 20000, DAY_MS = 24L * 60 * 60 * 1000;
 
@@ -92,6 +97,7 @@ public final class CarRelay {
         start(new Runnable() { public void run() { relay.serveTelemetry(); } }, "telemetry");
         start(new Runnable() { public void run() { record(); } }, "recorder");
         log("started " + RelayProtocol.HELLO);
+        relay.wifiKeeper.trigger("relay start");
         Looper.loop();
     }
 
@@ -159,6 +165,7 @@ public final class CarRelay {
             if (ignition.booleanValue() && ignitionOff) {
                 ignitionOnAt = logTimeMs(line);
                 publishMode(MODE_ECO);
+                wifiKeeper.trigger("ignition on");
             }
             ignitionOff = !ignition.booleanValue();
         }

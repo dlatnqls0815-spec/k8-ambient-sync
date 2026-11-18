@@ -1,5 +1,24 @@
 # 진행 상황
 
+## 차량 중계 0.4.2: 시동 시 Wi-Fi 자동 켜기 — 2026-11-18 (Claude, 23:49 차 설치 완료, 시동 후 동작은 미확인)
+
+- 23:49 사용자 승인("정차 안 해도 알아서 설치")으로 무선 ADB `nemesis install --update` 설치. 설치된 DEX md5 5f060860…e4899가 빌드와 같음, 임시 zip 삭제.
+  relay.log: `started K8AMB 1`, `wifi: window start (relay start)`, `wifi: on=true ap=false ALREADY_ON persist=3`, `phone connected`(Wi-Fi가 이미 켜져 있어 enable은 안 불림).
+  **다음에 확인:** 시동을 껐다 켠 뒤 relay.log의 `wifi:` 줄(꺼져 있었는지, `svc wifi enable` 결과, 핫스팟 접속).
+
+- 차 확인(읽기 전용, `tools/probe_wifi_aa.py`): 무선 ADB는 이미 영구(`persist.adb.tcp.port=5555`, `persist.service.adb.tcp.enable=0`, adbd 0.0.0.0:5555).
+  Wi-Fi는 헤드유닛 Wi-Fi 설정 화면(`com.hkmc.wifisettings`, uid 1000)이 `WifiService.setWifiEnabled(true)`를 부를 때까지 꺼져 있었다.
+  hostapd 없음(무선 AA 미사용), Seogaemo `modules.list`는 package-compat만(Wi-Fi·무선 ADB·무선 AA 모듈 꺼짐).
+  Seogaemo `wifi` 모듈(builtin_role client)은 재시작·시스템 모듈 활성화가 필요해 쓰지 않음.
+- 구현: `core/WifiKeeperPolicy`(판단 규칙, TestMain 15항목) + `car-relay/WifiKeeper`(실행). 릴레이 시작·시동 켬(ignition on) 때 20초 뒤부터 3분간 10초마다 확인,
+  `settings get global wifi_on`이 0이고 hostapd가 없으면 `svc wifi enable`(최대 4회). hostapd가 있으면 양보. 3분 뒤에는 손대지 않음.
+  끄기: 차의 `/data/local/tmp/k8-ambient-relay/wifi-keeper.off` 파일. 로그: relay.log `wifi:` 줄(상태 변화·결과·`persist.wifi.state`).
+- 빌드: 이 PC엔 API 19 android.jar와 JDK 7~17이 없어 `platforms/android-19`를 sdkmanager로 받고(사용자 승인), JDK 21에서 `-source 8`로 컴파일한 임시 사본 스크립트로 DEX 생성
+  (프로젝트 `build_api19_dex.py`는 `-source 7`이라 JDK 21 불가, 수정하지 않음). 소스는 Java 7 문법만 사용.
+  산출물 `private/nemesis-relay/k8ambient.relay-0.4.2.zip` (sha256 fd36c064…66f8af), DEX sha256 e8d628e8…9d96f2. 빌더가 이전 0.4.1 zip을 지움 → 롤백은 커밋 4459f46에서 0.4.1을 다시 빌드.
+- 검사: 코어 367, Python 90 통과. `tools/check.py`는 JDK 8 필요로 못 돌림.
+- 미확인: 차에서 `svc wifi enable`이 통하는지, 시동 뒤 누가 Wi-Fi를 끄는지, 켜진 뒤 핫스팟 자동 접속. 설치는 정차 상태에서 사용자 승인 뒤.
+
 ## 시동 시 Wi-Fi 자동 켜기(무선 AA 사용 중엔 양보) 준비 — 2026-11-18 (Claude, 차 확인 전)
 
 - 사용자 요청: 시동마다 Wi-Fi·무선 디버깅을 손으로 켜는 문제를, 무선 AA를 쓸 때만 양보하는 방식으로 해결.

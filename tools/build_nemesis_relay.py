@@ -20,14 +20,14 @@ NEMESIS_DIR = ROOT / "car-relay" / "nemesis"
 MAIN_CLASS = b"Lio/github/k8ambient/relay/CarRelay;"
 
 PACKAGE_ID = "k8ambient.relay"
-PACKAGE_VERSION = "0.4.1"
+PACKAGE_VERSION = "0.4.2"
 SERVICE_PATH = "svc/relay.sh"
 STATUS_PATH = "bin/status.sh"
 DEX_PATH = "bin/k8-ambient-relay.dex"
 SHORT_DESC = "Sends OEM ambient color/brightness to the phone over BT"
-DETAILED_DESC = ("Reads the factory ambient light status from the system log and serves it to one "
-                 "bonded phone over classic Bluetooth RFCOMM. Also records navigation/speed log lines "
-                 "for overspeed analysis, and speed/gear telemetry. Sends no vehicle or lighting commands.")
+DETAILED_DESC = ("Reads the factory ambient status from the log and sends it to the bonded phone over "
+                 "Bluetooth RFCOMM. Records overspeed logs, serves speed/gear telemetry, turns built-in "
+                 "Wi-Fi on after ignition unless the car hotspot runs. No vehicle commands.")
 
 
 def descriptor():
