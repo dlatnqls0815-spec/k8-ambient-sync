@@ -15,7 +15,8 @@
 - 빌드: 차량 `k8ambient.relay-0.4.4.zip`(dex_sha256 7d8fdc56…a504f), 휴대폰 0.5.3 → `../../deliverables/k8-ambient-phone-relay-0.5.3.apk`.
   DEX 빌드에는 `--android-jar <SDK>/platforms/android-19/android.jar`가 필요했다(`.tools/android19`에는 source.properties가 없어 거부됨).
   문서의 OneDrive JDK 17 경로는 없어졌고, 이번에는 `C:/Users/dlatn/Documents/Codex/2026-10-04/so/work/local-jvm/jdk-17.0.20.1+1`을 썼다.
-- 설치: 아직(차량·휴대폰 미연결). 차량은 정차 확인 후 `nemesis install --update`, 휴대폰은 `adb install -r`. 옛 휴대폰 앱은 `MYDRIVE` 줄을 무시하므로 차량만 먼저 올려도 된다.
+- 설치: 2026-11-20 05:04 차량 중계 0.4.4(설치 DEX md5가 빌드와 같음, 임시 zip 삭제), 휴대폰 0.5.3(USB, 재연결 확인). 옵션 켠 상태 실차 동작은 아직.
+  05:20 헤드유닛 재부팅(마이 드라이브 자동 중복 실행 정리) 뒤에도 중계 1개 정상, 휴대폰 연결됨.
 
 ## 차량 중계 0.4.3: Wi-Fi 상시 감시 — 2026-11-19 (Claude, 03:27 차 설치 완료)
 
