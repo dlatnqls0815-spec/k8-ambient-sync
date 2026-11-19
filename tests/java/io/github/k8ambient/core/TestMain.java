@@ -325,6 +325,111 @@ public final class TestMain {
         rejects(new Action() { public void run() { new DriveModeLight().setColor(DriveModeLight.ECO, 256, 2, 3); } });
     }
 
+    private static void myDriveProtocol() {
+        String sample = "11-16 18:30:01.234 D/SystemService( 2060):   mIndividualModeFeedback:   [0] 4  [1] 5  [2] 5  [3] 2  [4] 15";
+        int[] parsed = RelayProtocol.parseMyDriveLogLine(sample);
+        check(Arrays.equals(parsed, new int[] {4, 5, 5}), "parse My Drive feedback log");
+        check(Arrays.equals(RelayProtocol.parseMyDriveLogLine("D/SystemService(2060): mIndividualModeFeedback: [0] 2 [1] 2 [2] 2\r"),
+                new int[] {2, 2, 2}), "parse compact spacing without trailing items");
+        check(Arrays.equals(RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback:   [0]  0   [1]  255   [2]  5   [3] bad"),
+                new int[] {0, 255, 5}), "parse wide spacing and ignore index 3+");
+        check(RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback: [0] 4 [1] 5") == null, "short feedback ignored");
+        check(RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback: [1] 4 [2] 5 [3] 2") == null, "wrong indices ignored");
+        check(RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback: [0] -1 [1] 5 [2] 5") == null
+                && RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback: [0] 256 [1] 5 [2] 5") == null
+                && RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback: [0] x [1] 5 [2] 5") == null
+                && RelayProtocol.parseMyDriveLogLine("mIndividualModeFeedback:   ") == null
+                && RelayProtocol.parseMyDriveLogLine("D/SystemService( 2060): SYS_SPEED_M: 40") == null
+                && RelayProtocol.parseMyDriveLogLine(null) == null, "invalid or unrelated feedback lines ignored");
+
+        String encoded = RelayProtocol.encodeMyDrive(parsed);
+        check("MYDRIVE 4 5 5".equals(encoded), "encode MYDRIVE from array");
+        check("MYDRIVE 2 2 2".equals(RelayProtocol.encodeMyDrive(2, 2, 2)), "encode MYDRIVE from values");
+        check(Arrays.equals(RelayProtocol.decodeMyDrive(" " + encoded + "\r"), new int[] {4, 5, 5}), "decode MYDRIVE round trip");
+        check(RelayProtocol.decodeLine(encoded) == null, "MYDRIVE line is a valid non-status line");
+        check(RelayProtocol.decodeMyDrive("MYDRIVE 4 5") == null
+                && RelayProtocol.decodeMyDrive("MYDRIVE 4 5 5 2") == null
+                && RelayProtocol.decodeMyDrive("MYDRIVE -1 5 5") == null
+                && RelayProtocol.decodeMyDrive("MYDRIVE 256 5 5") == null
+                && RelayProtocol.decodeMyDrive("MYDRIVE 4 x 5") == null
+                && RelayProtocol.decodeMyDrive("MYDRIVE ") == null
+                && RelayProtocol.decodeMyDrive("MODE 06") == null
+                && RelayProtocol.decodeMyDrive(null) == null, "bad MYDRIVE lines ignored");
+        rejects(new Action() { public void run() { RelayProtocol.encodeMyDrive(null); } });
+        rejects(new Action() { public void run() { RelayProtocol.encodeMyDrive(new int[] {4, 5}); } });
+        rejects(new Action() { public void run() { RelayProtocol.encodeMyDrive(new int[] {4, 5, 5, 2}); } });
+        rejects(new Action() { public void run() { RelayProtocol.encodeMyDrive(-1, 5, 5); } });
+        rejects(new Action() { public void run() { RelayProtocol.encodeMyDrive(4, 256, 5); } });
+        rejects(new Action() { public void run() { RelayProtocol.encodeMyDrive(4, 5, 300); } });
+        rejects(new Action() { public void run() { RelayProtocol.decodeLine("MYDRIVE bad"); } });
+    }
+
+    private static void myDriveSportLight() {
+        check(MyDriveSportLight.anySport(new int[] {5, 2, 2}), "powertrain sport");
+        check(MyDriveSportLight.anySport(new int[] {4, 5, 2}), "suspension sport");
+        check(MyDriveSportLight.anySport(new int[] {2, 2, 5}), "steering sport");
+        check(MyDriveSportLight.anySport(new int[] {5, 5, 5}), "all sport");
+        check(!MyDriveSportLight.anySport(new int[] {4, 2, 2})
+                && !MyDriveSportLight.anySport(new int[] {2, 2, 2})
+                && !MyDriveSportLight.anySport(new int[] {5, 5})
+                && !MyDriveSportLight.anySport(null), "non-sport or missing feedback");
+
+        AmbientState normal = new AmbientState(0x9b, 0x21, 0xef, 70, true);
+        MyDriveSportLight disabled = new MyDriveSportLight(false, 255, 0, 0);
+        check(!disabled.isEnabled(), "disabled flag");
+        check(disabled.apply(normal, DriveModeLight.SMART, new int[] {5, 5, 5}) == normal, "disabled keeps My Drive normal");
+        check(disabled.apply(normal, DriveModeLight.SPORT, new int[] {4, 2, 2}) == normal, "disabled keeps Sport normal");
+
+        MyDriveSportLight enabled = new MyDriveSportLight(true, 255, 0, 0);
+        check(enabled.isEnabled(), "enabled flag");
+        check(enabled.apply(normal, DriveModeLight.SMART, null) == normal, "unknown feedback is not sport in My Drive");
+        check(enabled.apply(null, DriveModeLight.SMART, new int[] {5, 5, 5}) == null, "null mapped stays null");
+
+        AmbientState sportExpected = new AmbientState(255, 0, 0, 70, true);
+        check(sportExpected.equals(enabled.apply(normal, DriveModeLight.SMART, new int[] {5, 2, 2})), "My Drive powertrain sport -> red");
+        check(sportExpected.equals(enabled.apply(normal, DriveModeLight.SMART, new int[] {4, 5, 2})), "My Drive suspension sport -> red");
+        check(sportExpected.equals(enabled.apply(normal, DriveModeLight.SMART, new int[] {2, 2, 5})), "My Drive steering sport -> red");
+        check(enabled.apply(normal, DriveModeLight.SMART, new int[] {4, 2, 2}) == normal, "My Drive all non-sport -> normal");
+        check(sportExpected.equals(enabled.apply(normal, DriveModeLight.SPORT, new int[] {4, 2, 2})), "Sport mode -> red when feedback known");
+        check(sportExpected.equals(enabled.apply(normal, DriveModeLight.SPORT, null)), "Sport mode -> red even before any feedback");
+        check(enabled.apply(normal, DriveModeLight.ECO, new int[] {5, 5, 5}) == normal, "Eco mode keeps normal even if feedback had 5");
+        check(enabled.apply(normal, 0, new int[] {5, 5, 5}) == normal, "unknown mode keeps normal");
+
+        AmbientState off = new AmbientState(0x9b, 0x21, 0xef, 0, false);
+        AmbientState offResult = enabled.apply(off, DriveModeLight.SMART, new int[] {4, 5, 5});
+        check(!offResult.on && offResult.brightness == 0 && offResult.red == 255, "My Drive sport keeps power off");
+
+        MyDriveSportLight custom = new MyDriveSportLight(true, 240, 10, 20);
+        check(new AmbientState(240, 10, 20, 70, true).equals(custom.apply(normal, DriveModeLight.SMART, new int[] {4, 5, 2})),
+                "uses configured sport RGB");
+
+        SmlStatus unlinked = SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 8, 1, 1});
+        SmlStatus linked = SmlStatus.parse(new byte[] {0, (byte) 0x9b, 0, 0x21, 0, (byte) 0xef, 8, 1, 2});
+        DriveModeLight driveLight = new DriveModeLight();
+        driveLight.setColor(DriveModeLight.ECO, 50, 154, 158);
+        driveLight.setColor(DriveModeLight.SPORT, 255, 0, 0);
+        AmbientState user = new K8LotusMapping().map(unlinked);
+        check(new AmbientState(255, 0, 0, 70, true).equals(
+                enabled.apply(driveLight.apply(user, unlinked, DriveModeLight.SMART), DriveModeLight.SMART, new int[] {4, 5, 2})),
+                "unlinked + My Drive sport -> red");
+        check(new AmbientState(255, 0, 0, 70, true).equals(
+                enabled.apply(driveLight.apply(user, unlinked, DriveModeLight.SPORT), DriveModeLight.SPORT, new int[] {4, 2, 2})),
+                "unlinked + Sport mode -> red");
+        check(new AmbientState(50, 154, 158, 70, true).equals(
+                enabled.apply(driveLight.apply(user, linked, DriveModeLight.ECO), DriveModeLight.ECO, new int[] {5, 5, 5})),
+                "linked + Eco keeps Eco color");
+        check(new AmbientState(255, 0, 0, 70, true).equals(
+                enabled.apply(driveLight.apply(user, linked, DriveModeLight.SMART), DriveModeLight.SMART, new int[] {4, 5, 5})),
+                "linked + My Drive sport -> red");
+        check(user.equals(
+                enabled.apply(driveLight.apply(user, linked, DriveModeLight.SMART), DriveModeLight.SMART, new int[] {4, 2, 2})),
+                "linked + My Drive non-sport -> returns to user color");
+
+        rejects(new Action() { public void run() { new MyDriveSportLight(true, -1, 0, 0); } });
+        rejects(new Action() { public void run() { new MyDriveSportLight(true, 0, 256, 0); } });
+        rejects(new Action() { public void run() { new MyDriveSportLight(true, 0, 0, 256); } });
+    }
+
     private static void directColorDriveModeReplay() {
         K8LotusMapping mapping = new K8LotusMapping();
         DriveModeLight light = new DriveModeLight();
@@ -941,6 +1046,8 @@ public final class TestMain {
         fader();
         zengge();
         driveModeLight();
+        myDriveProtocol();
+        myDriveSportLight();
         directColorDriveModeReplay();
         predictedStatus();
         observedLotusReplay();

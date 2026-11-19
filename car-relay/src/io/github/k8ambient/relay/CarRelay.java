@@ -57,6 +57,9 @@ public final class CarRelay {
     /** Last non-zero drive mode code from SYS_DRIVE_MODE_DATA_M_RESP (0 = not seen yet). */
     private int driveMode;
     private long modeVersion;
+    /** Last My Drive feedback [powertrain, suspension, steering] from mIndividualModeFeedback (null = not seen yet). */
+    private int[] myDrive;
+    private long myDriveVersion;
     /** Last ignition value seen in the log was OFF (read-log thread only). */
     private boolean ignitionOff;
     /** Log time of day (ms) of the last ignition on, -1 if none (read-log thread only). */
@@ -160,6 +163,8 @@ public final class CarRelay {
                 publishMode(mode.intValue());
             }
         }
+        int[] feedback = RelayProtocol.parseMyDriveLogLine(line);
+        if (feedback != null) publishMyDrive(feedback);
         Boolean ignition = RelayProtocol.parseIgnitionLogLine(line);
         if (ignition != null) {
             // The car returns to ECO at every ignition on, with no drive mode line of its own.
@@ -261,9 +266,10 @@ public final class CarRelay {
     }
 
     /**
-     * The car reports the ambient status and drive mode only when they change, so after a restart the
-     * relay would have nothing to send. Restore the last values this relay itself logged
-     * ("<time> state SML <hex>", "<time> mode <hex>"). Reads only its own log file.
+     * The car reports the ambient status, drive mode and My Drive feedback only when they change,
+     * so after a restart the relay would have nothing to send. Restore the last values this relay
+     * itself logged ("<time> state SML <hex>", "<time> mode <hex>", "<time> mydrive <a> <b> <c>").
+     * Reads only its own log file.
      *
      * <p>On a fresh head unit boot (ignition on) the previous trip's drive mode is wrong: the user
      * reports the car returns to ECO at every start, and that reset is not seen as a mode line. So a
@@ -272,6 +278,7 @@ public final class CarRelay {
     void restoreFromOwnLog(File file, boolean freshBoot) {
         byte[] status = null;
         int mode = 0;
+        int[] restoredMyDrive = null;
         BufferedReader reader = null;
         try {
             reader = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(file), "US-ASCII"));
@@ -292,6 +299,13 @@ public final class CarRelay {
                 if (at > 0 && line.indexOf(' ') == at) {
                     Integer parsed = RelayProtocol.decodeDriveMode(RelayProtocol.MODE_PREFIX + line.substring(at + 6).trim());
                     if (parsed != null) mode = parsed.intValue();
+                    continue;
+                }
+                // Only "<time> mydrive <a> <b> <c>" lines: "restored ... mydrive ..." summaries must not be read back.
+                at = line.indexOf(" mydrive ");
+                if (at > 0 && line.indexOf(' ') == at) {
+                    int[] parsed = RelayProtocol.decodeMyDrive(RelayProtocol.MYDRIVE_PREFIX + line.substring(at + 9).trim());
+                    if (parsed != null) restoredMyDrive = parsed;
                 }
             }
         } catch (IOException ignored) {
@@ -303,10 +317,23 @@ public final class CarRelay {
         synchronized (lock) {
             if (status != null) { latest = status; version++; }
             if (mode != 0) { driveMode = mode; modeVersion++; }
+            if (restoredMyDrive != null) { myDrive = restoredMyDrive; myDriveVersion++; }
         }
         if (mode != 0) updateTelemetry(null, null, null, Integer.valueOf(mode));
         log("restored " + (status == null ? "-" : RelayProtocol.encodeStatus(status)) + " mode " + mode
+                + (restoredMyDrive == null ? ""
+                        : " mydrive " + restoredMyDrive[0] + " " + restoredMyDrive[1] + " " + restoredMyDrive[2])
                 + (freshBoot ? " (fresh boot: ECO)" : ""));
+    }
+
+    private void publishMyDrive(int[] feedback) {
+        synchronized (lock) {
+            if (myDrive != null && Arrays.equals(myDrive, feedback)) return;
+            myDrive = feedback;
+            myDriveVersion++;
+            lock.notifyAll();
+        }
+        log("mydrive " + feedback[0] + " " + feedback[1] + " " + feedback[2]);
     }
 
     private void publishMode(int mode) {
@@ -429,14 +456,16 @@ public final class CarRelay {
 
     private void stream(OutputStream output) throws IOException {
         write(output, RelayProtocol.HELLO);
-        long sent = -1, sentAlert = 0, sentMode = 0;
+        long sent = -1, sentAlert = 0, sentMode = 0, sentMyDrive = 0;
         while (true) {
             byte[] status;
-            long current, currentAlert, currentMode;
+            long current, currentAlert, currentMode, currentMyDrive;
             boolean active;
             int mode;
+            int[] feedback;
             synchronized (lock) {
-                if ((latest == null || version == sent) && alertVersion == sentAlert && modeVersion == sentMode) {
+                if ((latest == null || version == sent) && alertVersion == sentAlert
+                        && modeVersion == sentMode && myDriveVersion == sentMyDrive) {
                     try { lock.wait(PING_MS); } catch (InterruptedException e) { throw new IOException("interrupted"); }
                 }
                 status = latest;
@@ -445,11 +474,18 @@ public final class CarRelay {
                 currentAlert = alertVersion;
                 mode = driveMode;
                 currentMode = modeVersion;
+                feedback = myDrive;
+                currentMyDrive = myDriveVersion;
             }
             boolean wrote = false;
             if (currentMode != sentMode) {
                 write(output, RelayProtocol.encodeDriveMode(mode));
                 sentMode = currentMode;
+                wrote = true;
+            }
+            if (feedback != null && currentMyDrive != sentMyDrive) {
+                write(output, RelayProtocol.encodeMyDrive(feedback));
+                sentMyDrive = currentMyDrive;
                 wrote = true;
             }
             // The alert precedes the status it explains, so the phone already knows not to fade.

@@ -1,5 +1,17 @@
 # 진행 상황
 
+## 마이 드라이브 스포츠 빨강 옵션 — 2026-11-20 (구현, 실차 미확인)
+
+- 목적: 마이 드라이브(`MODE 06`)에서 엔진·서스펜션·핸들 항목 중 하나라도 스포츠(5)일 때(또는 스포츠 모드 `MODE 03`) 사제 조명을
+  스포츠 색(기본 255,0,0)으로 표시하고, 모두 비스포츠로 돌아오면 평소 색으로 복귀한다(기존 전환 페이드 유지, 과속 경고 우선, 순정 드라이브 모드 연동 여부 무관).
+- 코어: `RelayProtocol`에 `mIndividualModeFeedback: [0] a [1] b [2] c` 파서와 `MYDRIVE <a> <b> <c>` 인코더·디코더 추가(구버전 휴대폰은 무시).
+  순수 규칙 클래스 `MyDriveSportLight`와 `TestMain` 단위 테스트 추가.
+- 차량 중계(0.4.4): `CarRelay`가 `mIndividualModeFeedback` 변경 시에만 `MYDRIVE a b c` 전송, 휴대폰 접속 직후 재전송,
+  자체 `relay.log`의 `mydrive` 줄로 재시작 복원(읽기 전용 유지, 차량 명령·Binder 호출 없음).
+- 휴대폰 앱(0.5.3, code 21): `Prefs.MY_DRIVE_SPORT`(기본 꺼짐), `MainActivity` 스위치와 상태 표시(`RelayStatus.myDrive`),
+  `RelayService`의 `MYDRIVE` 수신(`DiagLog.event("rx", ...)`)·설정 재반영(`reloadThemes`)·`DriveModeLight` 뒤 `MyDriveSportLight` 적용.
+- 검증·빌드·설치: 아직 실행 전(`python tools/check.py`, API 19 DEX/APK 빌드, 실차 확인 필요).
+
 ## 차량 중계 0.4.3: Wi-Fi 상시 감시 — 2026-11-19 (Claude, 03:27 차 설치 완료)
 
 - 03:27 사용자 승인으로 설치. 설치된 DEX md5 c87a9808…5f420d가 빌드와 같음, 임시 zip 삭제.

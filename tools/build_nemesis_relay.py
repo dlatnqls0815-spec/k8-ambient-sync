@@ -20,7 +20,7 @@ NEMESIS_DIR = ROOT / "car-relay" / "nemesis"
 MAIN_CLASS = b"Lio/github/k8ambient/relay/CarRelay;"
 
 PACKAGE_ID = "k8ambient.relay"
-PACKAGE_VERSION = "0.4.3"
+PACKAGE_VERSION = "0.4.4"
 SERVICE_PATH = "svc/relay.sh"
 STATUS_PATH = "bin/status.sh"
 DEX_PATH = "bin/k8-ambient-relay.dex"

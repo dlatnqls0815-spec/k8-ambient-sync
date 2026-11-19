@@ -11,7 +11,9 @@ import java.util.UUID;
  * SML status (at least 9 bytes), {@code ALERT 1}/{@code ALERT 0} when the navigation's speed camera
  * alert starts/ends (the factory light then blinks red; the phone should switch without fading),
  * {@code MODE <hex>} when the drive mode changes (e.g. {@code MODE 03}),
- * {@code PING} as keepalive. The phone never sends commands. Older phones ignore ALERT lines.
+ * {@code MYDRIVE <a> <b> <c>} (decimal powertrain, suspension, steering feedback from My Drive),
+ * {@code PING} as keepalive. The phone never sends commands. Older phones ignore ALERT, MODE and
+ * MYDRIVE lines.
  */
 public final class RelayProtocol {
     /** Fixed service UUID for the SDP record (random, project-specific). */
@@ -22,7 +24,9 @@ public final class RelayProtocol {
     public static final String ALERT_ON = "ALERT 1", ALERT_OFF = "ALERT 0";
     private static final String LOG_MARKER = "SYS_SML_STATUS_M_RESP:";
     public static final String MODE_PREFIX = "MODE ";
+    public static final String MYDRIVE_PREFIX = "MYDRIVE ";
     private static final String DRIVE_MODE_MARKER = "SYS_DRIVE_MODE_DATA_M_RESP:";
+    private static final String MYDRIVE_MARKER = "mIndividualModeFeedback:";
     private static final String ALERT_ACTION = "NaviCameraAlertState", ALERT_FIELD = "mTempCameraAlertState :";
 
     private RelayProtocol() {}
@@ -98,7 +102,7 @@ public final class RelayProtocol {
         if (line == null) throw new IllegalArgumentException("Missing line");
         String text = line.trim();
         if (HELLO.equals(text) || PING.equals(text) || ALERT_ON.equals(text) || ALERT_OFF.equals(text)
-                || decodeDriveMode(text) != null) return null;
+                || decodeDriveMode(text) != null || decodeMyDrive(text) != null) return null;
         if (!text.startsWith("SML ")) throw new IllegalArgumentException("Unknown relay line");
         String hex = text.substring(4);
         if (hex.length() % 2 != 0 || hex.length() < 18 || hex.length() > MAX_STATUS_BYTES * 2)
@@ -167,6 +171,62 @@ public final class RelayProtocol {
         } catch (IllegalArgumentException bad) {
             return null;
         }
+    }
+
+    public static String encodeMyDrive(int[] feedback) {
+        if (feedback == null || feedback.length != 3)
+            throw new IllegalArgumentException("My Drive feedback must have 3 values");
+        return encodeMyDrive(feedback[0], feedback[1], feedback[2]);
+    }
+
+    public static String encodeMyDrive(int powertrain, int suspension, int steering) {
+        if (powertrain < 0 || powertrain > 255 || suspension < 0 || suspension > 255
+                || steering < 0 || steering > 255)
+            throw new IllegalArgumentException("My Drive feedback values must be 0..255");
+        return MYDRIVE_PREFIX + powertrain + " " + suspension + " " + steering;
+    }
+
+    /** The 3 decimal My Drive feedback values of a {@code MYDRIVE} line, or null for any other line. */
+    public static int[] decodeMyDrive(String line) {
+        if (line == null) return null;
+        String text = line.trim();
+        if (!text.startsWith(MYDRIVE_PREFIX)) return null;
+        String[] parts = text.substring(MYDRIVE_PREFIX.length()).trim().split("\\s+");
+        if (parts.length != 3) return null;
+        int a = parseByteDecimal(parts[0]);
+        int b = parseByteDecimal(parts[1]);
+        int c = parseByteDecimal(parts[2]);
+        if (a < 0 || b < 0 || c < 0) return null;
+        return new int[] {a, b, c};
+    }
+
+    /**
+     * My Drive item feedback from {@code D/SystemService( 2060): mIndividualModeFeedback: [0] 4 [1] 5 [2] 5 ...}.
+     * Returns {@code {powertrain, suspension, steering}} (indices [0]..[2], ignoring [3] and later),
+     * or null for unrelated or malformed lines.
+     */
+    public static int[] parseMyDriveLogLine(String line) {
+        if (line == null) return null;
+        int at = line.indexOf(MYDRIVE_MARKER);
+        if (at < 0) return null;
+        String[] parts = line.substring(at + MYDRIVE_MARKER.length()).trim().split("\\s+");
+        if (parts.length < 6) return null;
+        if (!"[0]".equals(parts[0]) || !"[1]".equals(parts[2]) || !"[2]".equals(parts[4])) return null;
+        int a = parseByteDecimal(parts[1]);
+        int b = parseByteDecimal(parts[3]);
+        int c = parseByteDecimal(parts[5]);
+        if (a < 0 || b < 0 || c < 0) return null;
+        return new int[] {a, b, c};
+    }
+
+    private static int parseByteDecimal(String token) {
+        if (token == null || token.isEmpty() || token.length() > 3) return -1;
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
+            if (c < '0' || c > '9') return -1;
+        }
+        int value = Integer.parseInt(token);
+        return value <= 255 ? value : -1;
     }
 
     public static String encodeAlert(boolean active) {

@@ -36,8 +36,8 @@ Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠
 - 드라이브 모드: `SYS_DRIVE_MODE_DATA_M_RESP` byte 2 = **0x02 에코, 0x03 스포츠, 0x06 스마트**(사용자 확인). 0x00(변경 직후)·0x0f(부팅 직후)는 모드 아님.
   시동 `SYS_IGN_STATUS_M: 0 → 1`이면 에코로 바꿈(차가 매번 에코로 돌아가지만 모드 줄이 없음).
   시동 직후 20초 안, 다른 모드 보고 전에 오는 0x06은 차량의 잘못된 보고라 무시(계기판은 에코였음).
-- 재시작 때 자기 `relay.log`의 마지막 `state`·`mode` 줄로 복원(차량은 변할 때만 보고). 헤드유닛 부팅 4분 이내면 에코로 시작.
-- 줄 프로토콜(UUID `6b38a0d2-4f7e-4c1b-9d5a-2e8f71c3b904`): `K8AMB 1`, `SML <hex>`, `ALERT 1/0`, `MODE <hex>`, `PING`.
+- 재시작 때 자기 `relay.log`의 마지막 `state`·`mode`·`mydrive` 줄로 복원(차량은 변할 때만 보고). 헤드유닛 부팅 4분 이내면 에코로 시작.
+- 줄 프로토콜(UUID `6b38a0d2-4f7e-4c1b-9d5a-2e8f71c3b904`): `K8AMB 1`, `SML <hex>`, `ALERT 1/0`, `MODE <hex>`, `MYDRIVE <a> <b> <c>`(마이 드라이브 엔진·서스펜션·핸들 피드백, 0.4.4+), `PING`.
 - 과속 분석용 기록기: `/data/nemesis/logs/k8ambient.relay/overspeed*.log`(16MB×6, root 전용 → `nemesis root -c cat`).
 - 엔진 사운드용 텔레메트리 RFCOMM 서버 "K8 Telemetry"(`TelemetryProtocol`, `TEL <kmh> <park> <rev> <mode>`) — `research/gps-engine-sound` 담당.
 
@@ -47,6 +47,7 @@ Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠
 - `ColorTone`(감마 1.8, 파랑 85%), 최대 밝기 Lotus 20%·Zengge 100%, 전환 기본 300ms, BLE 연결 우선순위 HIGH.
   0.4.4에서는 Zengge 평소 색과 경고 펄스를 바로 전송한다. 첫 점등 약 600ms와 경고 종료 후 색 복귀 페이드는 적용한다.
 - `DriveModeLight`: 연동이 켜졌을 때만 에코 (50,154,158)·스포츠 (255,0,0), 스마트는 사용자 색. 과속 경고가 우선.
+- `MyDriveSportLight`(휴대폰 0.5.3+, 기본 꺼짐, 실차 미확인): 마이 드라이브(`MODE 06`)에서 엔진·서스펜션·핸들 피드백(`mIndividualModeFeedback`) 중 하나라도 스포츠(5)이거나 스포츠 모드(`MODE 03`)면 순정 연동 여부와 무관하게 스포츠 색을 표시(과속 경고 우선).
 - `AutoStartReceiver`: 차량 ACL 연결·부팅·업데이트 때 자동 시작("중계 시작"을 눌러 둔 경우만, 배터리 "제한 없음" 상태).
 
 ## 남은 일 (우선순위 순)

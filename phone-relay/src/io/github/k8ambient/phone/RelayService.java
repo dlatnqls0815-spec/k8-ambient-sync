@@ -23,6 +23,7 @@ import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.Fader;
 import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
+import io.github.k8ambient.core.MyDriveSportLight;
 import io.github.k8ambient.core.RelayProtocol;
 import io.github.k8ambient.core.SmlStatus;
 import io.github.k8ambient.core.SyncEngine;
@@ -178,7 +179,8 @@ public final class RelayService extends Service {
         started = true;
         DiagLog.event("app", "중계 시작 " + versionName()
                 + (prefs.lamp() != null ? " Lotus" : "") + (prefs.zengge() != null ? " Zengge" : "")
-                + (prefs.power() ? " 전원옵션" : ""));
+                + (prefs.power() ? " 전원옵션" : "")
+                + (prefs.myDriveSport() ? " 마이드라이브스포츠" : ""));
         RelayStatus.reset();
         RelayStatus.running = true;
 
@@ -232,7 +234,9 @@ public final class RelayService extends Service {
         K8LotusMapping mapping = new K8LotusMapping();
         prefs.applyThemes(mapping);
         DriveModeLight driveLight = prefs.driveModeLight();
+        MyDriveSportLight myDriveLight = prefs.myDriveSportLight();
         int driveMode = 0;
+        int[] myDrive = null;
         long backoff = 3000;
         while (!stopping) {
             try {
@@ -256,28 +260,39 @@ public final class RelayService extends Service {
                         mapping = new K8LotusMapping();
                         prefs.applyThemes(mapping);
                         driveLight = prefs.driveModeLight();
+                        myDriveLight = prefs.myDriveSportLight();
                         if (!warning && lastNormalStatus != null)
-                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
+                            handleStatus(mapping, driveLight, myDriveLight, driveMode, myDrive, lastNormalStatus, false);
                     }
                     Integer mode = RelayProtocol.decodeDriveMode(line);
-                    if (mode != null) DiagLog.event("rx", line.trim());
                     if (mode != null) {
+                        DiagLog.event("rx", line.trim());
                         driveMode = mode.intValue();
                         RelayStatus.driveMode = driveMode;
                         if (!warning && lastNormalStatus != null)
-                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
+                            handleStatus(mapping, driveLight, myDriveLight, driveMode, myDrive, lastNormalStatus, false);
+                        continue;
+                    }
+                    int[] feedback = RelayProtocol.decodeMyDrive(line);
+                    if (feedback != null) {
+                        DiagLog.event("rx", line.trim());
+                        myDrive = feedback;
+                        RelayStatus.myDrive = RelayStatus.stamp("엔진 " + feedback[0] + " / 서스 " + feedback[1]
+                                + " / 핸들 " + feedback[2] + (MyDriveSportLight.anySport(feedback) ? " (스포츠)" : ""));
+                        if (!warning && lastNormalStatus != null)
+                            handleStatus(mapping, driveLight, myDriveLight, driveMode, myDrive, lastNormalStatus, false);
                         continue;
                     }
                     Boolean alert = RelayProtocol.decodeAlert(line);
-                    if (alert != null) DiagLog.event("rx", line.trim());
                     if (alert != null) {
+                        DiagLog.event("rx", line.trim());
                         boolean ended = warning && !alert.booleanValue();
                         warning = alert.booleanValue();
                         RelayStatus.target = RelayStatus.stamp(warning ? "과속 카메라 경고 시작" : "과속 카메라 경고 끝");
                         // Restore promptly even if the relay deduplicates the next normal SML.
                         // If we joined mid-alert, wait for the first normal SML instead.
                         if (ended && lastNormalStatus != null)
-                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
+                            handleStatus(mapping, driveLight, myDriveLight, driveMode, myDrive, lastNormalStatus, false);
                         continue;
                     }
                     byte[] raw;
@@ -287,7 +302,7 @@ public final class RelayService extends Service {
                     DiagLog.event("rx", line.trim());
                     SmlStatus status = SmlStatus.parse(raw);
                     if (!warning) lastNormalStatus = status;
-                    handleStatus(mapping, driveLight, driveMode, status, warning);
+                    handleStatus(mapping, driveLight, myDriveLight, driveMode, myDrive, status, warning);
                 }
                 RelayStatus.car("연결 끊김");
             } catch (IOException error) {
@@ -315,21 +330,24 @@ public final class RelayService extends Service {
         }
     }
 
-    private void handleStatus(K8LotusMapping mapping, DriveModeLight driveLight, int driveMode,
-                              SmlStatus status, boolean warning) {
+    private void handleStatus(K8LotusMapping mapping, DriveModeLight driveLight, MyDriveSportLight myDriveLight,
+                              int driveMode, int[] myDrive, SmlStatus status, boolean warning) {
         RelayStatus.raw = RelayStatus.stamp(RelayProtocol.encodeStatus(status.rawBytes()).substring(4));
         RelayStatus.themeKey = K8LotusMapping.isDirectColor(status) ? null : K8LotusMapping.themeKey(status);
         AmbientState mapped = mapping.map(status);
         RelayStatus.driveLinked = DriveModeLight.linked(status);
-        // A camera alert (red blink) always wins over the drive mode color, as on the car.
-        AmbientState state = warning ? mapped : driveLight.apply(mapped, status, driveMode);
+        // A camera alert (red blink) always wins over the drive mode and My Drive colors, as on the car.
+        boolean myDriveSport = !warning && myDriveLight.active(driveMode, myDrive);
+        AmbientState state = warning ? mapped
+                : myDriveLight.apply(driveLight.apply(mapped, status, driveMode), driveMode, myDrive);
         if (state == null) {
             RelayStatus.target = RelayStatus.stamp("알 수 없는 밝기 " + status.brightnessRaw);
             return;
         }
         String target = (state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
                 + " RGB " + state.red + "," + state.green + "," + state.blue
-                + (warning ? " (경고)" : "") + " 모드 " + driveMode + (DriveModeLight.linked(status) ? " 연동" : "");
+                + (warning ? " (경고)" : "") + " 모드 " + driveMode + (DriveModeLight.linked(status) ? " 연동" : "")
+                + (myDriveSport ? " 마이드라이브스포츠" : "");
         RelayStatus.target = RelayStatus.stamp(target);
         DiagLog.event("target", target);
         for (Lamp lamp : lamps) lamp.show(state, warning);

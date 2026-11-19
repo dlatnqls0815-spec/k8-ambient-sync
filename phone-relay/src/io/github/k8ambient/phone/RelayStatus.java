@@ -8,7 +8,7 @@ import java.util.Locale;
 final class RelayStatus {
     static volatile boolean running;
     static final int LOTUS = 0, ZENGGE = 1;
-    static volatile String car = "-", raw = "-", target = "-";
+    static volatile String car = "-", raw = "-", target = "-", myDrive = "-";
     static volatile String zenggeWarningWrites = "0 / 0";
     static final String[] lamp = {"-", "-"}, lastSent = {"-", "-"};
     static final long[] packets = new long[2];
@@ -44,7 +44,7 @@ final class RelayStatus {
     }
 
     static void reset() {
-        car = raw = target = "-";
+        car = raw = target = myDrive = "-";
         zenggeWarningWrites = "0 / 0";
         for (int i = 0; i < 2; i++) { lamp[i] = "-"; lastSent[i] = "-"; packets[i] = 0; }
         themeKey = null;
