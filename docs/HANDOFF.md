@@ -7,6 +7,8 @@ Codex와 Claude 모두 이 프로젝트 폴더에서 작업한다. 동기화와 
 
 ## 한 줄 요약
 
+2026-11-20 빌드 후보 **차량 중계 0.4.5 / 휴대폰 0.5.4**는 RGB 요청 예측과 휴대폰의 독립 마이 드라이브 색 덮어쓰기를 제거했다. 마이 드라이브 RGB는 순정 상태 응답으로 받고, 순정 드라이브 모드 연동 및 카메라 경고 처리는 별도로 유지한다. 새 버전은 실차 확인 전이다.
+
 2021 K8 GL3 HEV(Gen5W, Android 4.4.2/API19, NEMESIS 1.16.4)의 순정 앰비언트를 **B안**으로 사제 조명 2개에 동기화하는 데 성공했다:
 차량 NEMESIS 중계(로그 읽기 → 클래식 RFCOMM) → Galaxy 중계 앱 → BLE로 LotusLamp X + Zengge(LEDnetWF).
 A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종료**. C안(ESP32)은 2026-11-17~18 실차 시도 후 **철회**(PROGRESS·DECISIONS 2026-11-18).
@@ -32,7 +34,7 @@ Lotus의 과속 카메라 빨강 깜빡임, 드라이브 모드 연동(스포츠
 - `logcat -b main -b system -v time -s SystemService:V LightService:D`를 읽는다.
 - `SYS_SML_STATUS_M_RESP` 9바이트: RGB 16비트×3(상위 0x00=직접색, 0x01=테마), byte6 밝기 raw(1=꺼짐, 2~11=1~10단계),
   byte7 주행 중 감광(mode 8), byte8 드라이브 모드 연동(02 켜짐/01 꺼짐, mode 9).
-- 응답보다 약 0.3초 먼저 찍히는 명령 줄(`setSMLRGB`, `setSMLConfiguration` mode 5/8/9)로 예상 상태를 먼저 보냄(`RelayProtocol.predictStatus`), 실제 응답이 바로잡음.
+- 0.4.5부터 RGB는 `SYS_SML_STATUS_M_RESP`에서 확인한 뒤 보낸다. `setSMLConfiguration` mode 5/8/9의 설정값은 기존처럼 예측 전송하고 실제 응답으로 보정한다.
 - 과속 카메라: LightService `NaviCameraAlertState, mTempCameraAlertState : 1/0` → `ALERT 1/0`.
 - 드라이브 모드: `SYS_DRIVE_MODE_DATA_M_RESP` byte 2 = **0x02 에코, 0x03 스포츠, 0x06 스마트**(사용자 확인). 0x00(변경 직후)·0x0f(부팅 직후)는 모드 아님.
   시동 `SYS_IGN_STATUS_M: 0 → 1`이면 에코로 바꿈(차가 매번 에코로 돌아가지만 모드 줄이 없음).

@@ -39,17 +39,15 @@ public final class RelayProtocol {
         return line.toString();
     }
 
-    private static final String RGB_COMMAND = "[SystemService.setSMLRGB] red:";
     private static final String CONFIG_COMMAND = "[SystemService.setSMLConfiguration] mode:";
 
     /**
-     * Predicts the next SML status from the head unit's own command log line, which appears about
+     * Predicts configuration bytes from the head unit's command log line, which appears about
      * 0.3 s before the matching {@code SYS_SML_STATUS_M_RESP} (captured 2026-11-09):
      * <pre>
-     * [SystemService.setSMLRGB] red: 0x00 0xc1 , green: 0x00 0x21 , blue: 0x00 0xe0 , called by 2060
      * [SystemService.setSMLConfiguration] mode: 5, data: 9, called by 2060
      * </pre>
-     * RGB replaces bytes 0..5. Configuration mode 5 sets byte 6 (brightness raw), mode 8 byte 7
+     * RGB changes require a vehicle status response. Configuration mode 5 sets byte 6 (brightness raw), mode 8 byte 7
      * (dimmed while driving) and mode 9 byte 8 (drive mode link), as seen in the captured pairs.
      * Returns a new array, or null when the line is not such a command, the mode is another one, a
      * value is out of range, or there is no current status to change. The real response still
@@ -57,28 +55,7 @@ public final class RelayProtocol {
      */
     public static byte[] predictStatus(byte[] current, String line) {
         if (current == null || current.length < 9 || line == null) return null;
-        int at = line.indexOf(RGB_COMMAND);
-        if (at >= 0) {
-            String[] parts = line.substring(at + RGB_COMMAND.length()).split(",");
-            if (parts.length < 3) return null;
-            byte[] out = current.clone();
-            for (int channel = 0; channel < 3; channel++) {
-                String part = parts[channel];
-                int colon = part.indexOf(':');
-                String[] bytes = (colon < 0 ? part : part.substring(colon + 1)).trim().split("\\s+");
-                if (bytes.length != 2) return null;
-                for (int i = 0; i < 2; i++) {
-                    if (bytes[i].length() != 4 || !bytes[i].startsWith("0x")) return null;
-                    try {
-                        out[channel * 2 + i] = (byte) ((digit(bytes[i].charAt(2)) << 4) | digit(bytes[i].charAt(3)));
-                    } catch (IllegalArgumentException bad) {
-                        return null;
-                    }
-                }
-            }
-            return out;
-        }
-        at = line.indexOf(CONFIG_COMMAND);
+        int at = line.indexOf(CONFIG_COMMAND);
         if (at < 0) return null;
         String[] parts = line.substring(at + CONFIG_COMMAND.length()).split(",");
         if (parts.length < 2 || !parts[1].trim().startsWith("data:")) return null;

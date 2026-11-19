@@ -122,18 +122,6 @@ public final class MainActivity extends Activity {
         text(layout, "\n드라이브 모드 연동(순정 설정이 켜져 있을 때): 스마트는 사용자 색, 에코·스포츠는 아래 색");
         driveColorRow(layout, "에코 색 R,G,B", Prefs.DRIVE_ECO);
         driveColorRow(layout, "스포츠 색 R,G,B", Prefs.DRIVE_SPORT);
-        Switch myDriveSport = new Switch(this);
-        myDriveSport.setText("마이 드라이브 스포츠 빨강 (엔진·서스펜션·핸들 중 하나라도 스포츠면 빨강)");
-        myDriveSport.setChecked(prefs.myDriveSport());
-        myDriveSport.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(CompoundButton b, boolean checked) {
-                prefs.setMyDriveSport(checked);
-                if (RelayStatus.running) {
-                    startService(new Intent(MainActivity.this, RelayService.class).setAction(RelayService.ACTION_RELOAD_THEMES));
-                }
-            }
-        });
-        layout.addView(myDriveSport);
 
         text(layout, "\n부드러운 전환·색 톤 (움직이면 조명에 바로 반영)");
         slider(layout, "전환 시간", Prefs.FADE_MS, 0, 3000, 100, "ms");

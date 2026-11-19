@@ -50,6 +50,7 @@ public final class CarRelay {
     static final Pattern RECORD_SKIP = Pattern.compile(".*(getCANSTatus|getCANStatus|GetSpeedLimitForISLW|rearcamera|TIME_TICK|FrameCluster::updateTurn).*");
     private final Object lock = new Object();
     private byte[] latest;
+    private boolean latestPredicted;
     private long version;
     /** Navigation speed camera alert (factory light blinks red); forwarded so the phone skips fades. */
     private boolean alert;
@@ -231,17 +232,20 @@ public final class CarRelay {
 
     private void publish(byte[] status) {
         synchronized (lock) {
-            if (latest != null && Arrays.equals(latest, status)) return;
-            latest = status;
-            version++;
-            lock.notifyAll();
+            boolean changed = !Arrays.equals(latest, status);
+            if (!changed && !latestPredicted) return;
+            latestPredicted = false;
+            if (changed) {
+                latest = status;
+                version++;
+                lock.notifyAll();
+            }
         }
         log("state " + RelayProtocol.encodeStatus(status));
     }
 
     /**
-     * The head unit logs its own color/brightness command about 0.3 s before the status response.
-     * Send the predicted status at once; the real response follows and corrects it if it differs.
+     * Predict brightness and other configuration fields immediately. Wait for the car to confirm RGB.
      */
     private void publishPrediction(String line) {
         byte[] predicted;
@@ -249,6 +253,7 @@ public final class CarRelay {
             predicted = RelayProtocol.predictStatus(latest, line);
             if (predicted == null || Arrays.equals(latest, predicted)) return;
             latest = predicted;
+            latestPredicted = true;
             version++;
             lock.notifyAll();
         }
@@ -289,7 +294,8 @@ public final class CarRelay {
                     try {
                         String value = line.substring(at + 7);
                         int note = value.indexOf(" (");  // predicted states end in " (cmd)"
-                        byte[] raw = RelayProtocol.decodeLine(note < 0 ? value : value.substring(0, note));
+                        if (note >= 0) continue; // Previous relay versions could predict unconfirmed RGB.
+                        byte[] raw = RelayProtocol.decodeLine(value);
                         if (raw != null) status = raw;
                     } catch (IllegalArgumentException ignored) { }
                     continue;
