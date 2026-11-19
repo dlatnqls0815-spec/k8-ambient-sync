@@ -1,5 +1,18 @@
 # 진행 상황
 
+## 차량 중계 0.4.3: Wi-Fi 상시 감시 — 2026-11-19 (Claude, 03:27 차 설치 완료)
+
+- 03:27 사용자 승인으로 설치. 설치된 DEX md5 c87a9808…5f420d가 빌드와 같음, 임시 zip 삭제.
+  relay.log: `started K8AMB 1`, `wifi: window start (relay start)`, `phone connected`, `wifi: on=true ap=false ALREADY_ON`.
+  **다음에 확인:** 앱 업데이트로 헤드유닛만 재설정된 뒤 relay.log의 `wifi: setWifiEnabled false by ...`(누가 껐는지)와 `watch: found off` → 다시 켜짐.
+
+- 사용자 보고: 차 재시작 때는 Wi-Fi가 자동으로 켜지지만, 앱 업데이트로 헤드유닛만 재설정되면 Wi-Fi가 꺼진 채로 남는다.
+  relay.log(11-19 02:22~03:20): 릴레이 시작 9번, 03:02 꺼짐 → `svc wifi enable #1` → 켜짐, 나머지는 이미 켜짐. 꺼진 시점의 기록은 없다(0.4.2는 시작 후 3분만 감시).
+- 변경: 창 밖에서도 2분(`WATCH_SECONDS`)마다 확인해 꺼져 있으면 창을 다시 연다. logcat에 `WifiService:D`를 더해
+  `setWifiEnabled true/false pid uid`를 호출 프로세스 이름과 함께 relay.log에 남긴다(누가 껐는지).
+  Wi-Fi 설정 화면·상태바(`com.hkmc.wifisettings`, systemui/statusbar)에서 끄면 사용자 의도로 보고 다음 시동·릴레이 시작까지 켜지 않는다. 다른 호출자가 끄면 바로 창을 연다.
+- 검사: 코어 376(새 10), Python 90 통과. 빌드 `private/nemesis-relay/k8ambient.relay-0.4.3.zip` (sha256 46a488a3…de0c45), DEX sha256 2ec3128c…c961b.
+
 ## 차량 중계 0.4.2: 시동 시 Wi-Fi 자동 켜기 — 2026-11-18 (Claude, 23:49 차 설치 완료, 시동 후 동작은 미확인)
 
 - 23:49 사용자 승인("정차 안 해도 알아서 설치")으로 무선 ADB `nemesis install --update` 설치. 설치된 DEX md5 5f060860…e4899가 빌드와 같음, 임시 zip 삭제.

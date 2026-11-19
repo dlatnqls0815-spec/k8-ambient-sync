@@ -98,6 +98,7 @@ public final class CarRelay {
         start(new Runnable() { public void run() { record(); } }, "recorder");
         log("started " + RelayProtocol.HELLO);
         relay.wifiKeeper.trigger("relay start");
+        relay.wifiKeeper.startWatch();
         Looper.loop();
     }
 
@@ -120,7 +121,7 @@ public final class CarRelay {
                 // SystemService at V: the reverse status is only logged at verbose level.
                 // "-v time": the ignition rule below compares the head unit's own log times.
                 process = new ProcessBuilder("logcat", "-b", "main", "-b", "system", "-v", "time", "-s",
-                        "SystemService:V", "LightService:D")
+                        "SystemService:V", "LightService:D", "WifiService:D")
                         .redirectErrorStream(true).start();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
                 String line;
@@ -170,6 +171,7 @@ public final class CarRelay {
             ignitionOff = !ignition.booleanValue();
         }
         publishTelemetryLine(line);
+        wifiKeeper.onLogLine(line);
     }
 
     /** True when a "logcat -v time" line belongs in the overspeed recording. */

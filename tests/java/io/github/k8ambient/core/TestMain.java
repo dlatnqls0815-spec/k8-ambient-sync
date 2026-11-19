@@ -909,6 +909,22 @@ public final class TestMain {
         check(!WifiKeeperPolicy.hasAccessPoint("wifi 1 1 1 1 f 0 S com.example.hostapd_helper\n") && !WifiKeeperPolicy.hasAccessPoint(null),
                 "similar names and null are not a hotspot");
         check(WifiKeeperPolicy.SETTLE_SECONDS > 0 && WifiKeeperPolicy.WINDOW_SECONDS >= WifiKeeperPolicy.POLL_SECONDS * 2, "window sanity");
+        check(WifiKeeperPolicy.WATCH_SECONDS >= 60, "watch is light");
+        check(WifiKeeperPolicy.decide(off, false, 0, false, true) == WifiKeeperPolicy.Decision.USER_OFF, "user switch-off respected");
+        check(WifiKeeperPolicy.decide(on, false, 0, false, true) == WifiKeeperPolicy.Decision.ALREADY_ON, "user off but on again");
+        check(WifiKeeperPolicy.decide(off, false, 0, true, true) == WifiKeeperPolicy.Decision.DISABLED, "kill switch first");
+        int[] call = WifiKeeperPolicy.parseSetWifiEnabled("11-18 23:17:23.970 D/WifiService(  607): setWifiEnabled: true pid=4021, uid=1000");
+        check(call != null && call[0] == 1 && call[1] == 4021 && call[2] == 1000, "observed setWifiEnabled line");
+        call = WifiKeeperPolicy.parseSetWifiEnabled("D/WifiService(  607): setWifiEnabled: false pid=12, uid=0");
+        check(call != null && call[0] == 0 && call[1] == 12 && call[2] == 0, "switch-off line");
+        check(WifiKeeperPolicy.parseSetWifiEnabled("D/WifiService(  607): isWiFiSupport: true") == null
+                && WifiKeeperPolicy.parseSetWifiEnabled("setWifiEnabled: maybe pid=1, uid=1") == null
+                && WifiKeeperPolicy.parseSetWifiEnabled("setWifiEnabled: true pid=, uid=1") == null
+                && WifiKeeperPolicy.parseSetWifiEnabled(null) == null, "other WifiService lines ignored");
+        check(WifiKeeperPolicy.isUserWifiApp("com.hkmc.wifisettings") && WifiKeeperPolicy.isUserWifiApp("com.android.systemui"),
+                "user Wi-Fi screens");
+        check(!WifiKeeperPolicy.isUserWifiApp("pid 12") && !WifiKeeperPolicy.isUserWifiApp("/system/bin/sh")
+                && !WifiKeeperPolicy.isUserWifiApp("com.nemesis.manager") && !WifiKeeperPolicy.isUserWifiApp(null), "other callers");
     }
 
     public static void main(String[] args) {
