@@ -10,7 +10,12 @@
   자체 `relay.log`의 `mydrive` 줄로 재시작 복원(읽기 전용 유지, 차량 명령·Binder 호출 없음).
 - 휴대폰 앱(0.5.3, code 21): `Prefs.MY_DRIVE_SPORT`(기본 꺼짐), `MainActivity` 스위치와 상태 표시(`RelayStatus.myDrive`),
   `RelayService`의 `MYDRIVE` 수신(`DiagLog.event("rx", ...)`)·설정 재반영(`reloadThemes`)·`DriveModeLight` 뒤 `MyDriveSportLight` 적용.
-- 검증·빌드·설치: 아직 실행 전(`python tools/check.py`, API 19 DEX/APK 빌드, 실차 확인 필요).
+- 구현은 Gemini 4 Neon(High)이 `private/` 없는 작업 사본에서 했고, Claude가 검수했다(스포츠 모드는 피드백을 받기 전에도 빨강으로 수정).
+- 검사: `tools/check.py` 통과(코어 423, Python 90·1 건너뜀, host 14, 진단 모의 37, BLE probe 24, 차량 중계 API 19 컴파일).
+- 빌드: 차량 `k8ambient.relay-0.4.4.zip`(dex_sha256 7d8fdc56…a504f), 휴대폰 0.5.3 → `../../deliverables/k8-ambient-phone-relay-0.5.3.apk`.
+  DEX 빌드에는 `--android-jar <SDK>/platforms/android-19/android.jar`가 필요했다(`.tools/android19`에는 source.properties가 없어 거부됨).
+  문서의 OneDrive JDK 17 경로는 없어졌고, 이번에는 `C:/Users/dlatn/Documents/Codex/2026-10-04/so/work/local-jvm/jdk-17.0.20.1+1`을 썼다.
+- 설치: 아직(차량·휴대폰 미연결). 차량은 정차 확인 후 `nemesis install --update`, 휴대폰은 `adb install -r`. 옛 휴대폰 앱은 `MYDRIVE` 줄을 무시하므로 차량만 먼저 올려도 된다.
 
 ## 차량 중계 0.4.3: Wi-Fi 상시 감시 — 2026-11-19 (Claude, 03:27 차 설치 완료)
 

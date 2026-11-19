@@ -17,6 +17,7 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 |---|---|---|
 | 차량 NEMESIS `k8ambient.relay` | **0.4.3** (0.3.5 코드 + Wi-Fi 자동 켜기·2분 상시 감시, 2026-11-19 03:27 설치; 재부팅 후 켜짐은 0.4.2에서 확인). 롤백: 커밋 4459f46에서 0.4.1 재빌드 | `private/nemesis-relay/k8ambient.relay-0.4.3.zip` |
 | 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.5.2** (code 20, 내용은 0.4.8과 같음 — ESP32 기능 제거), 2026-11-18 USB 설치 | `../../deliverables/k8-ambient-phone-relay-0.5.2.apk` |
+| 설치 대기 | 차량 중계 **0.4.4**·휴대폰 **0.5.3**(마이 드라이브 스포츠 빨강 옵션, 2026-11-20 빌드, 미설치) | `private/nemesis-relay/k8ambient.relay-0.4.4.zip`, `../../deliverables/k8-ambient-phone-relay-0.5.3.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
 0.4.6은 시동 직후 차량 재접속 대기(최대 30초)를 없앴다(차량 ACL 연결 시 즉시 재시도). 0.4.5는 시동 뒤 Lotus가 수십 초 반응하지 않던 문제(혼잡 쓰기에 링크를 끊고, 남은 링크에 바로 재연결)를 고쳤다. 시동 재시험은 아직.
