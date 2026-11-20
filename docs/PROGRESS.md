@@ -1,5 +1,17 @@
 # 진행 상황
 
+## 2026-11-20 범용 사제 엠비언트 등록(RGB 설정·실시간 테스트) — 휴대폰 0.5.5 (빌드 완료, 실차 확인 전)
+
+- 목적: 기존 하드코딩된 Lotus·Zengge 외에 다른 사제 BLE 엠비언트도 앱에서 쉽게 추가·연동할 수 있도록 지원.
+- 코어(Java 7): `CustomRgbTemplate`(`RR`/`GG`/`BB` 자리표시자, `SQ` 시퀀스, `CS`/`CS:n` 합계 체크섬, `XR`/`XR:n` XOR 체크섬, 1개 고유 RGB 샘플 및 2~3개 샘플 기반 패킷 자동 추출), `CustomLampProfile`(8종 사제 프로토콜 프리셋, UUID 정규화/자동 추천, 조명별 색 순서·RGB 비율·최대 밝기·즉시전송·응답쓰기 설정 및 저장 직렬화) 추가.
+- 휴대폰 앱(0.5.5, code 23):
+  - `BleLampProbe`: BLE 기기 GATT 쓰기 가능 특성 자동 탐색 및 등록 전 실시간 RGB 테스트 전송.
+  - `GattTransport`: 커스텀 UUID, 선택적 Notify, 패킷 길이 기반 동적 MTU, `WRITE_TYPE_DEFAULT`/`WRITE_TYPE_NO_RESPONSE` 자동 선택 지원.
+  - `Prefs`·`RelayStatus`·`RelayService`: 기존 Lotus·Zengge 설정 100% 유지 + 다수의 커스텀 사제 조명 독립 스레드 구동 + `ACTION_RELOAD_LAMPS` 즉시 재적용.
+  - `MainActivity`: `+ 사제 엠비언트 추가 (BLE 스캔 · RGB 등록)`, `등록된 사제 엠비언트 관리`, 샘플 RGB 자동 추출 마법사, 빨강/초록/파랑/사용자 RGB 실시간 테스트 UI 추가.
+- 검사: `tools/check.py --android-jar ...` 통과(Python 89통과·1건너뜀, 코어 438, 호스트 14, 진단 모의 37, BLE probe 24, 차량 중계 API 19 컴파일).
+- 빌드: 휴대폰 APK `0.5.5` (`apksigner verify` 통과, sha256 `51c8eaa9…acfdf`). 실차·휴대폰 설치 및 실조명 검증은 대기.
+
 ## 2026-11-20 순정 색상 응답 기준 동기화
 
 - 사용자는 사제 조명만 빨강이 되고 원래 색으로 돌아오지 않는다고 보고했다. 0.4.5 차량 중계는 RGB 요청을 무시하고 상태 응답만 색에 반영한다. 이전 로그의 요청 예측도 재시작 복원에 사용하지 않는다.

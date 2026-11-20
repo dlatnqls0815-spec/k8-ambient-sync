@@ -969,8 +969,131 @@ public final class TestMain {
                 && !WifiKeeperPolicy.isUserWifiApp("com.nemesis.manager") && !WifiKeeperPolicy.isUserWifiApp(null), "other callers");
     }
 
+    private static void customRgbTemplate() {
+        CustomRgbTemplate lotus = CustomRgbTemplate.parse("7e 07 05 03 RR GG BB 10 ef");
+        check(lotus.packetLength() == 9, "custom template length");
+        check(Arrays.equals(lotus.format(255, 128, 16, 1), LotusE1Frames.color(255, 128, 16)),
+                "custom template matches LotusE1Frames");
+
+        CustomRgbTemplate zengge = CustomRgbTemplate.parse(
+                "00 SQ 80 00 00 0d 0e 0b 41 01 RR GG BB 00 00 00 01 00 00 f0 CS:8");
+        SyncEngine.ColorCodec zCodec = zengge.codec(ColorOrder.GRB);
+        ZenggeFrames.Codec refCodec = new ZenggeFrames.Codec(ColorOrder.GRB);
+        check(Arrays.equals(zCodec.color(200, 100, 50), refCodec.color(200, 100, 50)),
+                "custom template matches ZenggeFrames step 1");
+        check(Arrays.equals(zCodec.color(10, 20, 30), refCodec.color(10, 20, 30)),
+                "custom template matches ZenggeFrames step 2 (rolling SQ + CS:8)");
+
+        CustomRgbTemplate govee = CustomRgbTemplate.parse(
+                "33 05 02 RR GG BB 00 00 00 00 00 00 00 00 00 00 00 00 00 XR");
+        byte[] gFrame = govee.format(0xaa, 0x55, 0x0f, 0);
+        int expectedXor = 0x33 ^ 0x05 ^ 0x02 ^ 0xaa ^ 0x55 ^ 0x0f;
+        check(gFrame.length == 20 && (gFrame[19] & 0xff) == expectedXor, "XOR checksum");
+
+        CustomRgbTemplate sum0 = CustomRgbTemplate.parse("aa RR GG BB CS");
+        byte[] sFrame = sum0.format(10, 20, 30, 0);
+        check((sFrame[4] & 0xff) == ((0xaa + 10 + 20 + 30) & 0xff), "SUM from 0 checksum");
+
+        CustomRgbTemplate raw3 = CustomRgbTemplate.parse("RR,GG,BB");
+        check(raw3.normalized().equals("RR GG BB") && Arrays.equals(raw3.format(1, 2, 3, 0), new byte[] {1, 2, 3}),
+                "raw 3-byte RGB template");
+
+        // 1-sample inference with distinct RGB values.
+        CustomRgbTemplate one = CustomRgbTemplate.inferFromSample("56 12 34 56 00 f0 aa", 0x12, 0x34, 0x56);
+        check(one.normalized().equals("56 RR GG BB 00 f0 aa"), "1-sample inference Triones");
+
+        // 3-sample inference with varying channel magnitudes detects XOR checksum (Govee).
+        int[][] rgb3 = {{255, 0, 0}, {0, 128, 0}, {0, 0, 64}};
+        String[] gHex = {
+                hex(govee.format(255, 0, 0, 0)),
+                hex(govee.format(0, 128, 0, 0)),
+                hex(govee.format(0, 0, 64, 0))
+        };
+        CustomRgbTemplate inferredGovee = CustomRgbTemplate.inferFromSamples(gHex, rgb3);
+        check(inferredGovee.normalized().equals(govee.normalized()), "3-sample inference Govee XOR");
+
+        // 3-sample inference with rolling sequence + payload sum checksum (Zengge).
+        String[] zHex = {
+                hex(ZenggeFrames.staticColor(1, 255, 0, 0)),
+                hex(ZenggeFrames.staticColor(2, 0, 128, 0)),
+                hex(ZenggeFrames.staticColor(3, 0, 0, 64))
+        };
+        CustomRgbTemplate inferredZengge = CustomRgbTemplate.inferFromSamples(zHex, rgb3);
+        check(inferredZengge.normalized().equals(zengge.normalized()), "3-sample inference Zengge SQ + CS:8");
+
+        // SyncEngine integration with custom template (scaled brightness + OFF=black).
+        MockTransport mock = new MockTransport();
+        mock.acceptObservedLotus = true;
+        SyncEngine engine = SyncEngine.forScaledColor(mock, one.codec(ColorOrder.RGB), 100);
+        engine.setEnabled(true);
+        engine.onState(new AmbientState(200, 100, 50, 50, true));
+        engine.tick(0);
+        check(mock.writes.size() == 1 && hex(mock.writes.get(0)).equals("5664321900f0aa"),
+                "SyncEngine scales RGB into custom template");
+        engine.onState(new AmbientState(200, 100, 50, 50, false));
+        engine.tick(100);
+        check(mock.writes.size() == 2 && hex(mock.writes.get(1)).equals("5600000000f0aa"),
+                "SyncEngine sends black for OFF on custom template");
+
+        rejects(new Action() { public void run() { CustomRgbTemplate.parse(""); } });
+        rejects(new Action() { public void run() { CustomRgbTemplate.parse("7e RR GG"); } });
+        rejects(new Action() { public void run() { CustomRgbTemplate.parse("zz RR GG BB"); } });
+        rejects(new Action() { public void run() { CustomRgbTemplate.parse("CS RR GG BB"); } });
+        rejects(new Action() { public void run() { CustomRgbTemplate.parse("RR GG BB CS:3"); } });
+        rejects(new Action() { public void run() { CustomRgbTemplate.inferFromSample("56 ff 00 00 00 f0 aa", 255, 0, 0); } });
+        rejects(new Action() { public void run() { CustomRgbTemplate.inferFromSamples(new String[] {"56ff0000"}, new int[][] {{255, 0, 0}}); } });
+        rejects(new Action() { public void run() {
+            CustomRgbTemplate.inferFromSamples(new String[] {"56ff0000", "5600ff0001"}, new int[][] {{255, 0, 0}, {0, 255, 0}});
+        } });
+    }
+
+    private static void customLampProfile() {
+        check(CustomLampProfile.PRESETS.size() >= 7, "built-in presets present");
+        for (CustomLampProfile.Preset p : CustomLampProfile.PRESETS) {
+            check(CustomRgbTemplate.parse(p.template).packetLength() >= 3, "preset template valid: " + p.label);
+        }
+        check(CustomLampProfile.normalizeUuid("fff0").equals("0000fff0-0000-1000-8000-00805f9b34fb"), "16-bit UUID expand");
+        check(CustomLampProfile.shortUuid("0000fff3-0000-1000-8000-00805f9b34fb").equals("FFF3"), "16-bit UUID short");
+        check(CustomLampProfile.matchPresetIndex("ffff", "ff01", "LEDnetWF01") == 2, "match Zengge preset");
+        check(CustomLampProfile.matchPresetIndex("ffd5", "ffd9", "Triones-123") == 3, "match Triones preset");
+        check(CustomLampProfile.matchPresetIndex("fff0", "fff3", "Symphony-01") == 1, "match Symphony preset");
+
+        CustomLampProfile p1 = new CustomLampProfile(
+                "lamp1", "풋등 엠비언트", "aa:bb:cc:dd:ee:01",
+                "ffd5", "ffd9", "", "56 RR GG BB 00 f0 aa",
+                ColorOrder.GRB, 40, 100, 90, 80, false, false, true);
+        CustomLampProfile p2 = new CustomLampProfile(
+                "lamp2", "대시보드", "11:22:33:44:55:66",
+                "ffff", "ff01", "ff02",
+                "00 SQ 80 00 00 0d 0e 0b 41 01 RR GG BB 00 00 00 01 00 00 f0 CS:8",
+                ColorOrder.RGB, 100, 100, 100, 100, true, true, false);
+        check(p1.requiredMtu() == 0 && p2.requiredMtu() == 24, "required MTU calculation");
+        check(p1.toColorTone(18).maxBrightness == 40 && p1.toColorTone(18).blueGain == 80, "per-lamp ColorTone");
+
+        String encoded = CustomLampProfile.encodeList(Arrays.asList(p1, p2));
+        List<CustomLampProfile> decoded = CustomLampProfile.decodeList(encoded + "\ncorrupted\tline\n");
+        check(decoded.size() == 2, "profile list round-trip skips corrupted line");
+        check(decoded.get(0).id.equals("lamp1") && decoded.get(0).name.equals("풋등 엠비언트")
+                && decoded.get(0).address.equals("AA:BB:CC:DD:EE:01") && decoded.get(0).colorOrder == ColorOrder.GRB
+                && decoded.get(0).enabled && !decoded.get(0).writeWithResponse, "profile 1 preserved");
+        check(decoded.get(1).id.equals("lamp2") && decoded.get(1).notifyUuid.equals("0000ff02-0000-1000-8000-00805f9b34fb")
+                && decoded.get(1).writeWithResponse && decoded.get(1).instant && !decoded.get(1).enabled, "profile 2 preserved");
+        check(p2.withEnabled(true).enabled, "withEnabled toggle");
+
+        rejects(new Action() { public void run() {
+            new CustomLampProfile("id", "n", "bad-mac", "fff0", "fff3", "", "RR GG BB",
+                    ColorOrder.RGB, 50, 100, 100, 100, false, false, true);
+        } });
+        rejects(new Action() { public void run() {
+            new CustomLampProfile("id", "n", "AA:BB:CC:DD:EE:FF", "fff0", "fff3", "", "RR GG BB",
+                    ColorOrder.RGB, 0, 100, 100, 100, false, false, true);
+        } });
+    }
+
     public static void main(String[] args) {
         wifiKeeperPolicy();
+        customRgbTemplate();
+        customLampProfile();
         stateAndRawStatus();
         packets();
         k8ProvisionalBrightness();

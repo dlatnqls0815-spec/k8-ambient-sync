@@ -4,15 +4,19 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import io.github.k8ambient.core.ColorOrder;
 import io.github.k8ambient.core.ColorTone;
+import io.github.k8ambient.core.CustomLampProfile;
 import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** Saved car/lamp addresses, the experimental power option and user theme colors. */
+/** Saved car/lamp addresses, custom aftermarket lamps, experimental power option and user theme colors. */
 final class Prefs {
     private static final String NAME = "relay", CAR = "car", LAMP = "lamp", POWER = "power", THEMES = "themes";
+    private static final String CUSTOM_LAMPS = "customLamps", CUSTOM_SEQ = "customSeq";
     private final SharedPreferences prefs;
 
     Prefs(Context context) {
@@ -34,7 +38,61 @@ final class Prefs {
     /** The user's strip shows green for red and red for green, so GRB is the default. */
     ColorOrder zenggeOrder() { return ColorOrder.parse(prefs.getString("zenggeOrder", "GRB")); }
     void setZenggeOrder(ColorOrder order) { prefs.edit().putString("zenggeOrder", order.name()).apply(); }
-    boolean anyLamp() { return lamp() != null || zengge() != null; }
+
+    /** All user-registered custom aftermarket ambient lamps. */
+    List<CustomLampProfile> customLamps() {
+        return CustomLampProfile.decodeList(prefs.getString(CUSTOM_LAMPS, ""));
+    }
+
+    List<CustomLampProfile> enabledCustomLamps() {
+        List<CustomLampProfile> out = new ArrayList<CustomLampProfile>();
+        for (CustomLampProfile p : customLamps()) if (p.enabled) out.add(p);
+        return out;
+    }
+
+    boolean hasEnabledCustomLamp() {
+        return !enabledCustomLamps().isEmpty();
+    }
+
+    String nextCustomId() {
+        int next = prefs.getInt(CUSTOM_SEQ, 0) + 1;
+        prefs.edit().putInt(CUSTOM_SEQ, next).apply();
+        return "lamp" + next;
+    }
+
+    void saveCustomLamp(CustomLampProfile profile) {
+        List<CustomLampProfile> list = customLamps();
+        boolean replaced = false;
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).id.equals(profile.id)) {
+                list.set(i, profile);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) list.add(profile);
+        prefs.edit().putString(CUSTOM_LAMPS, CustomLampProfile.encodeList(list)).apply();
+    }
+
+    void removeCustomLamp(String id) {
+        List<CustomLampProfile> list = customLamps();
+        List<CustomLampProfile> kept = new ArrayList<CustomLampProfile>();
+        for (CustomLampProfile p : list) if (!p.id.equals(id)) kept.add(p);
+        prefs.edit().putString(CUSTOM_LAMPS, CustomLampProfile.encodeList(kept)).apply();
+    }
+
+    void setCustomLampEnabled(String id, boolean enabled) {
+        List<CustomLampProfile> list = customLamps();
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).id.equals(id)) {
+                list.set(i, list.get(i).withEnabled(enabled));
+                break;
+            }
+        }
+        prefs.edit().putString(CUSTOM_LAMPS, CustomLampProfile.encodeList(list)).apply();
+    }
+
+    boolean anyLamp() { return lamp() != null || zengge() != null || hasEnabledCustomLamp(); }
     boolean power() { return prefs.getBoolean(POWER, false); }
 
     /** Tone/fade settings. Defaults: deeper colors (gamma 1.8), slightly less blue, 20 % max, 0.3 s fade (0.8 s until 0.4.1). */
@@ -60,6 +118,11 @@ final class Prefs {
     ColorTone tone(boolean zengge) {
         return new ColorTone(clamp(get(GAMMA), 10, 30), clamp(get(RED), 0, 100), clamp(get(GREEN), 0, 100),
                 clamp(get(BLUE), 0, 100), clamp(get(zengge ? ZENGGE_MAX : MAX), 1, 100));
+    }
+
+    /** Per-lamp tone for a custom aftermarket ambient lamp (uses shared gamma + lamp's own RGB gains & max). */
+    ColorTone toneForCustom(CustomLampProfile profile) {
+        return profile.toColorTone(clamp(get(GAMMA), 10, 30));
     }
 
     long fadeMs() { return clamp(get(FADE_MS), 0, 5000); }
@@ -143,18 +206,23 @@ final class Prefs {
 
     /** Parses {@code r,g,b} with each value 0..255; returns null otherwise. */
     static int[] parseRgb(String text) {
+        return parseTriple(text, 0, 255);
+    }
+
+    /** Parses {@code a,b,c} with each value in {@code min..max}; returns null otherwise. */
+    static int[] parseTriple(String text, int min, int max) {
         if (text == null) return null;
         String[] parts = text.trim().split("\\s*,\\s*");
         if (parts.length != 3) return null;
-        int[] rgb = new int[3];
+        int[] out = new int[3];
         try {
             for (int i = 0; i < 3; i++) {
-                rgb[i] = Integer.parseInt(parts[i]);
-                if (rgb[i] < 0 || rgb[i] > 255) return null;
+                out[i] = Integer.parseInt(parts[i]);
+                if (out[i] < min || out[i] > max) return null;
             }
         } catch (NumberFormatException e) {
             return null;
         }
-        return rgb;
+        return out;
     }
 }

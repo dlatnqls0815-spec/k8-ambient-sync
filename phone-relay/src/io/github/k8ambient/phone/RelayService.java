@@ -19,6 +19,7 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import io.github.k8ambient.core.AmbientState;
 import io.github.k8ambient.core.ColorTone;
+import io.github.k8ambient.core.CustomLampProfile;
 import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.Fader;
 import io.github.k8ambient.core.HueBrightness;
@@ -30,27 +31,32 @@ import io.github.k8ambient.core.ZenggeFrames;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Plan B phone relay: receives raw K8 SML status from the car relay over RFCOMM, maps it, and
- * drives the saved lamps over BLE with the captured frame formats: a LotusLamp X and/or a Zengge
- * (LEDnetWF) strip, each on its own thread so a slow or missing lamp never delays the other.
- * Lotus power frames are only used when the user enables the option.
+ * drives the saved lamps over BLE: LotusLamp X, Zengge (LEDnetWF), and any user-registered
+ * {@link CustomLampProfile} aftermarket lamps, each on its own thread so a slow or missing lamp
+ * never delays the others.
  */
 public final class RelayService extends Service {
     static final String ACTION_RELOAD_THEMES = "io.github.k8ambient.phone.RELOAD_THEMES";
+    static final String ACTION_RELOAD_LAMPS = "io.github.k8ambient.phone.RELOAD_LAMPS";
     private static final String CHANNEL = "relay";
     private static final long TICK_MS = 25, LINK_TIMEOUT_MS = 30000;
     private static final long STARTUP_FADE_MS = 600;
 
     private final List<Lamp> lamps = new CopyOnWriteArrayList<Lamp>();
     private boolean started;
+    private BluetoothAdapter btAdapter;
     private Thread carThread, watchdog;
     private volatile boolean stopping, reloadThemes;
     private volatile BluetoothSocket socket;
     private volatile long lastLineAt;
+    private volatile AmbientState lastPushedState;
+    private volatile boolean lastPushedWarning;
     /**
      * While the car is off the retry interval grows to 30 s, so at ignition the phone used to reach the
      * relay up to 30 s late (2026-11-11: relay ready 17:46:34, phone 17:47:01). When the phone's
@@ -75,10 +81,16 @@ public final class RelayService extends Service {
         long warningOnWrites, warningOffWrites;
 
         final boolean zengge;
+        final boolean instant;
+        final String customId;
+        final String logName;
 
-        Lamp(String name, boolean zengge, SyncEngine engine) {
+        Lamp(String name, boolean zengge, boolean instant, String customId, SyncEngine engine) {
             this.engine = engine;
             this.zengge = zengge;
+            this.instant = instant;
+            this.customId = customId;
+            this.logName = customId != null ? "custom:" + customId : (zengge ? "zengge" : "lotus");
             thread = new HandlerThread(name);
             thread.start();
             handler = new Handler(thread.getLooper());
@@ -103,7 +115,7 @@ public final class RelayService extends Service {
             long sentBefore = engine.getSuccessfulWrites();
             try { engine.tick(now, startupFade); } catch (RuntimeException error) {
                 RelayStatus.target = RelayStatus.stamp("오류 " + error.getClass().getSimpleName());
-                DiagLog.event("error", (zengge ? "zengge" : "lotus") + " " + error);
+                DiagLog.event("error", logName + " " + error);
             }
             if (zengge && cameraWarning && engine.getSuccessfulWrites() != sentBefore) {
                 if (shown.on) warningOnWrites++;
@@ -116,7 +128,12 @@ public final class RelayService extends Service {
         final Runnable reloadTone = new Runnable() {
             public void run() {
                 Prefs prefs = new Prefs(RelayService.this);
-                tone = prefs.tone(zengge);
+                if (customId != null) {
+                    CustomLampProfile profile = findCustom(prefs, customId);
+                    if (profile != null) tone = prefs.toneForCustom(profile);
+                } else {
+                    tone = prefs.tone(zengge);
+                }
                 hue = prefs.hueBrightness();
                 fadeMs = prefs.fadeMs();
                 if (lastMapped != null) fader.target(toned(lastMapped), SystemClock.elapsedRealtime(), 0);
@@ -138,11 +155,11 @@ public final class RelayService extends Service {
                     lastMapped = state;
                     cameraWarning = warningFrame;
                     // The factory alert blinks once a second; a fade would blur and delay it.
-                    // On Zengge send one ordinary color, not a queue of intermediate frames.
-                    long duration = warningFrame || (zengge && !recoveryFade) ? 0 : fadeMs;
+                    // Instant lamps (Zengge / instant custom) send one ordinary color immediately.
+                    long duration = warningFrame || (instant && !recoveryFade) ? 0 : fadeMs;
                     fader.target(toned(state), now, duration);
                     // Keep the engine's write pacing; if still rate-limited, the next tick retries.
-                    if (zengge) render(now);
+                    if (instant) render(now);
                 }
             });
         }
@@ -154,12 +171,23 @@ public final class RelayService extends Service {
         }
     }
 
+    private static CustomLampProfile findCustom(Prefs prefs, String id) {
+        for (CustomLampProfile p : prefs.customLamps()) {
+            if (p.id.equals(id)) return p;
+        }
+        return null;
+    }
+
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_RELOAD_THEMES.equals(intent.getAction())) {
             reloadThemes = true;
             for (Lamp lamp : lamps) lamp.handler.post(lamp.reloadTone);
+            return START_STICKY;
+        }
+        if (intent != null && ACTION_RELOAD_LAMPS.equals(intent.getAction())) {
+            if (started && btAdapter != null) reloadCustomLamps(new Prefs(this));
             return START_STICKY;
         }
         // startForegroundService() requires startForeground() on every start, even one that exits at once.
@@ -175,9 +203,12 @@ public final class RelayService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        btAdapter = adapter;
         started = true;
+        List<CustomLampProfile> customEnabled = prefs.enabledCustomLamps();
         DiagLog.event("app", "중계 시작 " + versionName()
                 + (prefs.lamp() != null ? " Lotus" : "") + (prefs.zengge() != null ? " Zengge" : "")
+                + (customEnabled.isEmpty() ? "" : " 커스텀" + customEnabled.size() + "개")
                 + (prefs.power() ? " 전원옵션" : ""));
         RelayStatus.reset();
         RelayStatus.running = true;
@@ -185,13 +216,16 @@ public final class RelayService extends Service {
         // ColorTone already scales brightness to the lamp maximum, so the engines pass it through.
         if (prefs.lamp() != null) {
             GattTransport lotus = GattTransport.lotus(this, adapter, prefs.lamp());
-            lamps.add(new Lamp("lotus-sync", false, prefs.power()
+            lamps.add(new Lamp("lotus-sync", false, false, null, prefs.power()
                     ? SyncEngine.forLotusWithStaticPower(lotus, 100) : SyncEngine.forObservedLotus(lotus, 100)));
         }
         if (prefs.zengge() != null) {
             GattTransport zengge = GattTransport.zengge(this, adapter, prefs.zengge());
-            lamps.add(new Lamp("zengge-sync", true,
+            lamps.add(new Lamp("zengge-sync", true, true, null,
                     SyncEngine.forScaledColor(zengge, new ZenggeFrames.Codec(prefs.zenggeOrder()), 100)));
+        }
+        for (CustomLampProfile profile : customEnabled) {
+            startCustomLamp(adapter, profile);
         }
 
         carThread = new Thread(new Runnable() {
@@ -214,6 +248,32 @@ public final class RelayService extends Service {
         }, "car-watchdog");
         watchdog.start();
         return START_STICKY;
+    }
+
+    private void startCustomLamp(BluetoothAdapter adapter, CustomLampProfile profile) {
+        GattTransport transport = GattTransport.custom(this, adapter, profile);
+        Lamp lamp = new Lamp("custom-" + profile.id, false, profile.instant, profile.id,
+                SyncEngine.forScaledColor(transport, profile.newCodec(), 100));
+        lamps.add(lamp);
+        AmbientState current = lastPushedState;
+        if (current != null) lamp.show(current, lastPushedWarning);
+    }
+
+    private void reloadCustomLamps(Prefs prefs) {
+        List<Lamp> oldCustom = new ArrayList<Lamp>();
+        for (Lamp lamp : lamps) {
+            if (lamp.customId != null) oldCustom.add(lamp);
+        }
+        for (Lamp lamp : oldCustom) {
+            lamps.remove(lamp);
+            lamp.stop();
+            RelayStatus.clearCustom(lamp.customId);
+        }
+        List<CustomLampProfile> enabled = prefs.enabledCustomLamps();
+        DiagLog.event("app", "사제 조명 재적용 (" + enabled.size() + "개 활성)");
+        for (CustomLampProfile profile : enabled) {
+            startCustomLamp(btAdapter, profile);
+        }
     }
 
     /** Closes a silent car link so the car loop reconnects. */
@@ -339,6 +399,8 @@ public final class RelayService extends Service {
                 + (warning ? " (경고)" : "") + " 모드 " + driveMode + (DriveModeLight.linked(status) ? " 연동" : "");
         RelayStatus.target = RelayStatus.stamp(target);
         DiagLog.event("target", target);
+        lastPushedState = state;
+        lastPushedWarning = warning;
         for (Lamp lamp : lamps) lamp.show(state, warning);
     }
 
