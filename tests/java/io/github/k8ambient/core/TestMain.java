@@ -1090,10 +1090,99 @@ public final class TestMain {
         } });
     }
 
+    private static void vehicleProfilesAndCustomMapping() {
+        // 프리셋 기본값 및 ID 조회
+        check(VehicleProfile.PRESETS.size() == 3, "3 vehicle presets");
+        check(VehicleProfile.byId(null).equals(VehicleProfile.K8_GL3), "null falls back to K8");
+        check(VehicleProfile.byId("UNKNOWN").equals(VehicleProfile.K8_GL3), "unknown falls back to K8");
+        check(VehicleProfile.byId(VehicleProfile.ID_EV6_IONIQ).equals(VehicleProfile.EV6_IONIQ), "EV6 preset lookup");
+        check(VehicleProfile.byId(VehicleProfile.ID_GEN5W_AUTO).equals(VehicleProfile.GEN5W_AUTO), "Gen5W auto lookup");
+        check(!VehicleProfile.K8_GL3.allowAdaptiveRange && VehicleProfile.EV6_IONIQ.allowAdaptiveRange
+                && VehicleProfile.GEN5W_AUTO.allowAdaptiveRange, "adaptive defaults");
+
+        // K8 기본 프로필은 기존 범위 밖 raw(0, 12)를 계속 null로 거부
+        K8LotusMapping k8 = new K8LotusMapping(VehicleProfile.K8_GL3);
+        check(k8.map(rawLevel(0)) == null && k8.map(rawLevel(12)) == null, "K8 rejects out-of-range raw");
+        check(!k8.map(rawLevel(1)).on && k8.map(rawLevel(1)).brightness == 0, "K8 raw 1 is OFF");
+        check(k8.map(rawLevel(2)).brightness == 10 && k8.map(rawLevel(11)).brightness == 100, "K8 raw 2..11");
+
+        // 0=꺼짐, 1~10=밝기 차종 프로필 테스트
+        VehicleProfile zeroToTen = VehicleProfile.GEN5W_AUTO.withBrightnessRange(0, 1, 10, false);
+        K8LotusMapping map010 = new K8LotusMapping(zeroToTen);
+        check(!map010.map(rawLevel(0)).on && map010.map(rawLevel(0)).brightness == 0, "0..10 raw 0 is OFF");
+        check(map010.map(rawLevel(1)).on && map010.map(rawLevel(1)).brightness == 10, "0..10 raw 1 is 10%");
+        check(map010.map(rawLevel(5)).brightness == 50 && map010.map(rawLevel(10)).brightness == 100, "0..10 linear");
+        check(map010.map(rawLevel(11)) == null, "0..10 non-adaptive rejects 11");
+
+        // 0=꺼짐, 1~100=밝기 차종 프로필 테스트
+        VehicleProfile zeroToHundred = VehicleProfile.GEN5W_AUTO.withBrightnessRange(0, 1, 100, false);
+        K8LotusMapping map0100 = new K8LotusMapping(zeroToHundred);
+        check(!map0100.map(rawLevel(0)).on, "0..100 raw 0 is OFF");
+        check(map0100.map(rawLevel(1)).brightness == 1 && map0100.map(rawLevel(50)).brightness == 50
+                && map0100.map(rawLevel(100)).brightness == 100, "0..100 percentage");
+
+        // 자동 적응 모드: 범위 밖 낮은 값은 꺼짐, 높은 값은 상한 자동 확장 학습 + 비례 정규화
+        K8LotusMapping adaptive = new K8LotusMapping(VehicleProfile.GEN5W_AUTO);
+        check(!adaptive.map(rawLevel(0)).on && adaptive.map(rawLevel(0)).brightness == 0, "adaptive raw 0 treated as OFF");
+        check(!adaptive.map(rawLevel(1)).on && adaptive.map(rawLevel(1)).brightness == 0, "adaptive raw 1 is OFF");
+        check(adaptive.map(rawLevel(6)).brightness == 50 && adaptive.effectiveMaxOnRaw() == 11, "adaptive within initial range");
+        AmbientState expanded = adaptive.map(rawLevel(101));
+        check(expanded.on && expanded.brightness == 100 && adaptive.effectiveMaxOnRaw() == 101, "adaptive expands upper bound");
+        AmbientState mid = adaptive.map(rawLevel(51));
+        check(mid.on && mid.brightness == 50, "adaptive rescales after learning max=101");
+
+        // 꺼짐 원시값 없음(-1) + 1단계(min==max) 특수 케이스
+        VehicleProfile singleStep = VehicleProfile.GEN5W_AUTO.withBrightnessRange(-1, 5, 5, false);
+        K8LotusMapping singleMap = new K8LotusMapping(singleStep);
+        check(singleMap.map(rawLevel(5)).on && singleMap.map(rawLevel(5)).brightness == 100, "single step maps to 100%");
+        check(singleMap.map(rawLevel(1)) == null, "non-adaptive without offRaw rejects other values");
+
+        // 드라이브 모드 코드 원터치 할당 및 충돌 해소
+        VehicleProfile customModes = VehicleProfile.EV6_IONIQ
+                .withAssignedModeCode(VehicleProfile.ROLE_ECO, 0x04)
+                .withAssignedModeCode(VehicleProfile.ROLE_SPORT, 0x05)
+                .withAssignedModeCode(VehicleProfile.ROLE_NORMAL, 0x01);
+        check(customModes.ecoModeCode == 0x04 && customModes.sportModeCode == 0x05 && customModes.normalModeCode == 0x01,
+                "custom mode codes assigned");
+        // 이미 에코(0x04)로 지정된 코드를 스포츠로 재지정하면 에코에서 충돌 해제(0)
+        VehicleProfile reassigned = customModes.withAssignedModeCode(VehicleProfile.ROLE_SPORT, 0x04);
+        check(reassigned.sportModeCode == 0x04 && reassigned.ecoModeCode == 0, "mode role conflict cleared");
+        check(customModes.modeLabel(0x04).contains("에코") && customModes.modeLabel(0x05).contains("스포츠")
+                && customModes.modeLabel(0x01).contains("일반") && customModes.modeLabel(0x09).contains("0x09")
+                && customModes.modeLabel(0).contains("아직 모름"), "mode labels");
+
+        // DriveModeLight.fromProfile: 커스텀 드라이브 모드 코드(0x04 에코, 0x05 스포츠, 0x01 일반)
+        SmlStatus linked = SmlStatus.parse(new byte[] {0, 0x10, 0, 0x20, 0, 0x30, 11, 1, 2});
+        SmlStatus unlinked = SmlStatus.parse(new byte[] {0, 0x10, 0, 0x20, 0, 0x30, 11, 1, 1});
+        AmbientState base = new K8LotusMapping(customModes).map(linked);
+        DriveModeLight customLight = DriveModeLight.fromProfile(customModes, new int[] {10, 200, 180}, new int[] {255, 20, 10});
+        AmbientState ecoState = customLight.apply(base, linked, 0x04, customModes);
+        AmbientState sportState = customLight.apply(base, linked, 0x05, customModes);
+        AmbientState normalState = customLight.apply(base, linked, 0x01, customModes);
+        AmbientState k8EcoIgnored = customLight.apply(base, linked, 0x02, customModes);
+        check(ecoState.red == 10 && ecoState.green == 200 && ecoState.blue == 180, "custom eco mode code applies eco color");
+        check(sportState.red == 255 && sportState.green == 20 && sportState.blue == 10, "custom sport mode code applies sport color");
+        check(normalState == base, "normal mode keeps user color");
+        check(k8EcoIgnored == base, "unmapped code keeps user color");
+        check(customLight.apply(base, unlinked, 0x05, customModes) == base, "unlinked status ignores mode override");
+        customLight.clearModeColor(0x05);
+        check(customLight.apply(base, linked, 0x05, customModes) == base, "clearModeColor restores user color");
+
+        // 잘못된 프로필 입력 거부
+        rejects(new Action() { public void run() { VehicleProfile.K8_GL3.withBrightnessRange(5, 2, 11, false); } });
+        rejects(new Action() { public void run() { VehicleProfile.K8_GL3.withBrightnessRange(1, 12, 11, false); } });
+        rejects(new Action() { public void run() { VehicleProfile.K8_GL3.withBrightnessRange(-2, 1, 10, false); } });
+        rejects(new Action() { public void run() { VehicleProfile.K8_GL3.withAssignedModeCode(VehicleProfile.ROLE_ECO, 0); } });
+        rejects(new Action() { public void run() { VehicleProfile.K8_GL3.withAssignedModeCode("bad", 2); } });
+        rejects(new Action() { public void run() { new K8LotusMapping(null); } });
+        rejects(new Action() { public void run() { new DriveModeLight().setModeColor(0, 1, 2, 3); } });
+    }
+
     public static void main(String[] args) {
         wifiKeeperPolicy();
         customRgbTemplate();
         customLampProfile();
+        vehicleProfilesAndCustomMapping();
         stateAndRawStatus();
         packets();
         k8ProvisionalBrightness();

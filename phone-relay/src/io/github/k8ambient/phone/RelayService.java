@@ -27,6 +27,7 @@ import io.github.k8ambient.core.K8LotusMapping;
 import io.github.k8ambient.core.RelayProtocol;
 import io.github.k8ambient.core.SmlStatus;
 import io.github.k8ambient.core.SyncEngine;
+import io.github.k8ambient.core.VehicleProfile;
 import io.github.k8ambient.core.ZenggeFrames;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -289,8 +290,8 @@ public final class RelayService extends Service {
     }
 
     private void carLoop(BluetoothAdapter adapter, Prefs prefs) {
-        K8LotusMapping mapping = new K8LotusMapping();
-        prefs.applyThemes(mapping);
+        VehicleProfile profile = prefs.vehicleProfile();
+        K8LotusMapping mapping = prefs.createMapping();
         DriveModeLight driveLight = prefs.driveModeLight();
         int driveMode = 0;
         long backoff = 3000;
@@ -313,11 +314,11 @@ public final class RelayService extends Service {
                     lastLineAt = SystemClock.elapsedRealtime();
                     if (reloadThemes) {
                         reloadThemes = false;
-                        mapping = new K8LotusMapping();
-                        prefs.applyThemes(mapping);
+                        profile = prefs.vehicleProfile();
+                        mapping = prefs.createMapping();
                         driveLight = prefs.driveModeLight();
                         if (!warning && lastNormalStatus != null)
-                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
+                            handleStatus(profile, mapping, driveLight, driveMode, lastNormalStatus, false);
                     }
                     Integer mode = RelayProtocol.decodeDriveMode(line);
                     if (mode != null) {
@@ -325,7 +326,7 @@ public final class RelayService extends Service {
                         driveMode = mode.intValue();
                         RelayStatus.driveMode = driveMode;
                         if (!warning && lastNormalStatus != null)
-                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
+                            handleStatus(profile, mapping, driveLight, driveMode, lastNormalStatus, false);
                         continue;
                     }
                     int[] feedback = RelayProtocol.decodeMyDrive(line);
@@ -344,7 +345,7 @@ public final class RelayService extends Service {
                         // Restore promptly even if the relay deduplicates the next normal SML.
                         // If we joined mid-alert, wait for the first normal SML instead.
                         if (ended && lastNormalStatus != null)
-                            handleStatus(mapping, driveLight, driveMode, lastNormalStatus, false);
+                            handleStatus(profile, mapping, driveLight, driveMode, lastNormalStatus, false);
                         continue;
                     }
                     byte[] raw;
@@ -354,7 +355,7 @@ public final class RelayService extends Service {
                     DiagLog.event("rx", line.trim());
                     SmlStatus status = SmlStatus.parse(raw);
                     if (!warning) lastNormalStatus = status;
-                    handleStatus(mapping, driveLight, driveMode, status, warning);
+                    handleStatus(profile, mapping, driveLight, driveMode, status, warning);
                 }
                 RelayStatus.car("연결 끊김");
             } catch (IOException error) {
@@ -382,21 +383,24 @@ public final class RelayService extends Service {
         }
     }
 
-    private void handleStatus(K8LotusMapping mapping, DriveModeLight driveLight,
+    private void handleStatus(VehicleProfile profile, K8LotusMapping mapping, DriveModeLight driveLight,
                               int driveMode, SmlStatus status, boolean warning) {
         RelayStatus.raw = RelayStatus.stamp(RelayProtocol.encodeStatus(status.rawBytes()).substring(4));
+        RelayStatus.brightnessRaw = status.brightnessRaw;
         RelayStatus.themeKey = K8LotusMapping.isDirectColor(status) ? null : K8LotusMapping.themeKey(status);
         AmbientState mapped = mapping.map(status);
-        RelayStatus.driveLinked = DriveModeLight.linked(status);
+        RelayStatus.effectiveMaxRaw = mapping.effectiveMaxOnRaw();
+        boolean linked = DriveModeLight.linked(status, profile);
+        RelayStatus.driveLinked = linked;
         // My Drive changes arrive as confirmed SML. Item feedback is only diagnostic.
-        AmbientState state = warning ? mapped : driveLight.apply(mapped, status, driveMode);
+        AmbientState state = warning ? mapped : driveLight.apply(mapped, status, driveMode, profile);
         if (state == null) {
-            RelayStatus.target = RelayStatus.stamp("알 수 없는 밝기 " + status.brightnessRaw);
+            RelayStatus.target = RelayStatus.stamp("알 수 없는 밝기 raw=" + status.brightnessRaw + " (밝기 범위 설정 필요)");
             return;
         }
         String target = (state.on ? "켜짐 " + state.brightness + "%" : "꺼짐")
                 + " RGB " + state.red + "," + state.green + "," + state.blue
-                + (warning ? " (경고)" : "") + " 모드 " + driveMode + (DriveModeLight.linked(status) ? " 연동" : "");
+                + (warning ? " (경고)" : "") + " 모드 " + VehicleProfile.formatCode(driveMode) + (linked ? " 연동" : "");
         RelayStatus.target = RelayStatus.stamp(target);
         DiagLog.event("target", target);
         lastPushedState = state;

@@ -8,6 +8,7 @@ import io.github.k8ambient.core.CustomLampProfile;
 import io.github.k8ambient.core.DriveModeLight;
 import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
+import io.github.k8ambient.core.VehicleProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,11 @@ import java.util.TreeMap;
 final class Prefs {
     private static final String NAME = "relay", CAR = "car", LAMP = "lamp", POWER = "power", THEMES = "themes";
     private static final String CUSTOM_LAMPS = "customLamps", CUSTOM_SEQ = "customSeq";
+    private static final String VEHICLE_PROFILE = "vehicleProfile";
+    private static final String BRIGHT_CUSTOM = "brightCustom", BRIGHT_OFF = "brightOffRaw",
+            BRIGHT_MIN = "brightMinRaw", BRIGHT_MAX = "brightMaxRaw", BRIGHT_ADAPTIVE = "brightAdaptive";
+    private static final String MODE_CUSTOM = "modeCustom", MODE_ECO = "modeEcoCode",
+            MODE_SPORT = "modeSportCode", MODE_NORMAL = "modeNormalCode";
     private final SharedPreferences prefs;
 
     Prefs(Context context) {
@@ -163,12 +169,77 @@ final class Prefs {
         prefs.edit().putString(key, rgb[0] + "," + rgb[1] + "," + rgb[2]).apply();
     }
 
+    /** 선택된 차종 프로필 ID (기본값 K8_GL3 — 기존 K8 사용자 100% 호환). */
+    String vehicleProfileId() {
+        return prefs.getString(VEHICLE_PROFILE, VehicleProfile.ID_K8_GL3);
+    }
+
+    /** 현재 활성화된 차종 프로필 (프리셋 + 사용자 밝기/드라이브 모드 코드 커스텀 오버라이드 반영). */
+    VehicleProfile vehicleProfile() {
+        VehicleProfile base = VehicleProfile.byId(vehicleProfileId());
+        if (prefs.getBoolean(BRIGHT_CUSTOM, false)) {
+            int off = prefs.getInt(BRIGHT_OFF, base.offRaw);
+            int min = prefs.getInt(BRIGHT_MIN, base.minOnRaw);
+            int max = prefs.getInt(BRIGHT_MAX, base.maxOnRaw);
+            boolean adaptive = prefs.getBoolean(BRIGHT_ADAPTIVE, base.allowAdaptiveRange);
+            try {
+                base = base.withBrightnessRange(off, min, max, adaptive);
+            } catch (IllegalArgumentException ignored) { }
+        }
+        if (prefs.getBoolean(MODE_CUSTOM, false)) {
+            int eco = prefs.getInt(MODE_ECO, base.ecoModeCode);
+            int sport = prefs.getInt(MODE_SPORT, base.sportModeCode);
+            int normal = prefs.getInt(MODE_NORMAL, base.normalModeCode);
+            try {
+                base = base.withModeCodes(eco, sport, normal);
+            } catch (IllegalArgumentException ignored) { }
+        }
+        return base;
+    }
+
+    /** 차종 프리셋을 선택하고 이전 커스텀 밝기/모드 오버라이드를 프리셋 기본값으로 초기화한다. */
+    void selectVehicleProfile(String profileId) {
+        VehicleProfile chosen = VehicleProfile.byId(profileId);
+        prefs.edit()
+                .putString(VEHICLE_PROFILE, chosen.id)
+                .putBoolean(BRIGHT_CUSTOM, false)
+                .putBoolean(MODE_CUSTOM, false)
+                .apply();
+    }
+
+    /** 밝기 원시값 범위(꺼짐/최소/최대/자동적응)를 사용자 지정으로 저장한다. */
+    void setCustomBrightnessRange(int offRaw, int minOnRaw, int maxOnRaw, boolean adaptive) {
+        // 유효성 검증 후 저장
+        vehicleProfile().withBrightnessRange(offRaw, minOnRaw, maxOnRaw, adaptive);
+        prefs.edit()
+                .putBoolean(BRIGHT_CUSTOM, true)
+                .putInt(BRIGHT_OFF, offRaw)
+                .putInt(BRIGHT_MIN, minOnRaw)
+                .putInt(BRIGHT_MAX, maxOnRaw)
+                .putBoolean(BRIGHT_ADAPTIVE, adaptive)
+                .apply();
+    }
+
+    /** 현재 차에서 수신된 드라이브 모드 바이트 코드를 에코/스포츠/일반 역할에 원터치 지정한다. */
+    VehicleProfile assignDriveModeCode(String role, int modeCode) {
+        VehicleProfile updated = vehicleProfile().withAssignedModeCode(role, modeCode);
+        prefs.edit()
+                .putBoolean(MODE_CUSTOM, true)
+                .putInt(MODE_ECO, updated.ecoModeCode)
+                .putInt(MODE_SPORT, updated.sportModeCode)
+                .putInt(MODE_NORMAL, updated.normalModeCode)
+                .apply();
+        return updated;
+    }
+
+    K8LotusMapping createMapping() {
+        K8LotusMapping mapping = new K8LotusMapping(vehicleProfile());
+        applyThemes(mapping);
+        return mapping;
+    }
+
     DriveModeLight driveModeLight() {
-        DriveModeLight light = new DriveModeLight();
-        int[] eco = driveColor(DRIVE_ECO), sport = driveColor(DRIVE_SPORT);
-        light.setColor(DriveModeLight.ECO, eco[0], eco[1], eco[2]);
-        light.setColor(DriveModeLight.SPORT, sport[0], sport[1], sport[2]);
-        return light;
+        return DriveModeLight.fromProfile(vehicleProfile(), driveColor(DRIVE_ECO), driveColor(DRIVE_SPORT));
     }
 
     /** Theme colors as {@code key=r,g,b;key=r,g,b}. Invalid entries are skipped. */

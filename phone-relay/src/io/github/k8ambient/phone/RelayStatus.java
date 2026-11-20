@@ -20,6 +20,8 @@ final class RelayStatus {
     static volatile String themeKey;
     static volatile int driveMode;
     static volatile boolean driveLinked;
+    static volatile int brightnessRaw = -1;
+    static volatile int effectiveMaxRaw = -1;
 
     private RelayStatus() {}
 
@@ -77,5 +79,9 @@ final class RelayStatus {
         customLastSent.clear();
         customPackets.clear();
         themeKey = null;
+        driveMode = 0;
+        driveLinked = false;
+        brightnessRaw = -1;
+        effectiveMaxRaw = -1;
     }
 }

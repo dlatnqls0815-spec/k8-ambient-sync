@@ -24,6 +24,13 @@ public final class DriveModeLight {
         return status != null && status.driveModeRaw == LINK_ON;
     }
 
+    /** 차종 프로필의 연동 켜짐 원시값({@code linkOnRaw})을 기준으로 순정 드라이브 모드 연동 여부를 판정한다. */
+    public static boolean linked(SmlStatus status, VehicleProfile profile) {
+        if (status == null) return false;
+        int expected = profile == null ? LINK_ON : profile.linkOnRaw;
+        return status.driveModeRaw == expected;
+    }
+
     public static boolean known(int mode) {
         return mode == ECO || mode == SPORT || mode == SMART;
     }
@@ -31,10 +38,37 @@ public final class DriveModeLight {
     /** Sets the color shown in a fixed-color mode (ECO or SPORT). SMART always uses the user color. */
     public void setColor(int mode, int red, int green, int blue) {
         if (mode != ECO && mode != SPORT) throw new IllegalArgumentException("Only ECO and SPORT have fixed colors");
+        setModeColor(mode, red, green, blue);
+    }
+
+    /**
+     * 임의의 드라이브 모드 바이트 코드(1..255)에 고정 색을 매핑한다.
+     * 다른 현대·기아·제네시스 Gen5W 차종에서 에코/스포츠 코드가 K8과 다를 때 사용한다.
+     */
+    public void setModeColor(int modeCode, int red, int green, int blue) {
+        if (modeCode < 1 || modeCode > 255) throw new IllegalArgumentException("Drive mode code must be 1..255");
         AmbientState.checkRange(red, 255);
         AmbientState.checkRange(green, 255);
         AmbientState.checkRange(blue, 255);
-        colors.put(Integer.valueOf(mode), new int[] {red, green, blue});
+        colors.put(Integer.valueOf(modeCode), new int[] {red, green, blue});
+    }
+
+    /** 지정한 드라이브 모드 바이트 코드의 고정 색 매핑을 제거한다(사용자 색 유지). */
+    public void clearModeColor(int modeCode) {
+        colors.remove(Integer.valueOf(modeCode));
+    }
+
+    /** 차종 프로필과 에코/스포츠 RGB로 {@link DriveModeLight}를 구성한다. */
+    public static DriveModeLight fromProfile(VehicleProfile profile, int[] ecoRgb, int[] sportRgb) {
+        VehicleProfile active = profile == null ? VehicleProfile.K8_GL3 : profile;
+        DriveModeLight light = new DriveModeLight();
+        if (active.ecoModeCode > 0 && active.ecoModeCode != active.normalModeCode && ecoRgb != null && ecoRgb.length == 3) {
+            light.setModeColor(active.ecoModeCode, ecoRgb[0], ecoRgb[1], ecoRgb[2]);
+        }
+        if (active.sportModeCode > 0 && active.sportModeCode != active.normalModeCode && sportRgb != null && sportRgb.length == 3) {
+            light.setModeColor(active.sportModeCode, sportRgb[0], sportRgb[1], sportRgb[2]);
+        }
+        return light;
     }
 
     /**
@@ -42,7 +76,12 @@ public final class DriveModeLight {
      * is on and the mode has a fixed color, otherwise {@code mapped} unchanged.
      */
     public AmbientState apply(AmbientState mapped, SmlStatus status, int mode) {
-        if (mapped == null || !linked(status)) return mapped;
+        return apply(mapped, status, mode, VehicleProfile.K8_GL3);
+    }
+
+    /** 차종 프로필의 연동 기준값으로 드라이브 모드 고정 색을 적용한다. */
+    public AmbientState apply(AmbientState mapped, SmlStatus status, int mode, VehicleProfile profile) {
+        if (mapped == null || !linked(status, profile)) return mapped;
         int[] color = colors.get(Integer.valueOf(mode));
         if (color == null) return mapped;
         return new AmbientState(color[0], color[1], color[2], mapped.brightness, mapped.on);

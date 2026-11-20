@@ -1,5 +1,19 @@
 # 진행 상황
 
+## 2026-11-20 현대·기아·제네시스 Gen5W 타 차종 확장(차종 프로필·적응형 밝기·원터치 모드 학습) — 휴대폰 0.5.6 (빌드 완료, 실차 확인 전)
+
+- 목적: 기존 K8 GL3 HEV 전용 기본값과 100% 호환을 유지하면서, EV6·아이오닉5·6 및 기타 현대·기아·제네시스 Gen5W 차종에서도 코드 수정 없이 앱 설정만으로 순정 앰비언트를 연동할 수 있게 확장.
+- 코어(Java 7):
+  - `VehicleProfile`: 3종 프리셋(`K8_GL3` 기본, `EV6_IONIQ`, `GEN5W_AUTO`), 커스텀 밝기 원시값 범위(`offRaw`, `minOnRaw`, `maxOnRaw`, `allowAdaptiveRange`), 커스텀 드라이브 모드 바이트 코드(`ecoModeCode`, `sportModeCode`, `normalModeCode`) 및 역할 충돌 자동 해소(`withAssignedModeCode`) 추가.
+  - `K8LotusMapping`: 기본 생성자는 `VehicleProfile.K8_GL3` 그대로 유지(기존 단위 테스트 100% 호환). `K8LotusMapping(VehicleProfile)` 생성자에서 `1~11`, `0~10`, `0~100` 등 임의 범위를 선형 정규화하며, `allowAdaptiveRange=true`일 때 범위 밖 원시값이 들어오면 무시하지 않고 안전하게 꺼짐/최대값 자동 확장 학습(`effectiveMaxOnRaw()`)으로 정규화.
+  - `DriveModeLight`: 기존 API 유지 + `setModeColor`/`clearModeColor`/`fromProfile`/`linked(status, profile)`/`apply(mapped, status, mode, profile)` 추가.
+- 차량 중계(`car-relay` 0.4.5 점검): `SYS_SML_STATUS_M_RESP`·`SYS_DRIVE_MODE_DATA_M_RESP` 파싱과 NEMESIS 패키지(`os=any`, `models=any`)가 이미 K8 외 Gen5W 차종의 `0x01..0x0e, 0x10..0xff` 드라이브 모드 코드를 모두 통과시키므로 불필요한 변경 없이 `0.4.5` 유지.
+- 휴대폰 앱(0.5.6, code 24):
+  - `Prefs`·`RelayStatus`·`RelayService`: 차종 프로필·커스텀 밝기 범위·커스텀 드라이브 모드 코드 저장 및 실행 중 즉시 재반영(`ACTION_RELOAD_THEMES`), 현재 수신 중인 `brightnessRaw`와 `effectiveMaxRaw` 표시.
+  - `MainActivity`: `차종 프로필` 선택 버튼, `밝기 원시값 범위 설정` 다이얼로그(`1~11`/`0~10`/`0~100` 빠른 선택 + 직접 입력 + 자동 적응 토글), 현재 수신 드라이브 모드 코드(`0x..`)를 `에코`/`스포츠`/`일반(사용자색)`에 지정하는 원터치 버튼 3종 추가.
+- 검사: `tools/check.py --android-jar ...` 통과(Python 89통과·1건너뜀, 코어 476, 호스트 14, 진단 모의 37, BLE probe 24, 차량 중계 API 19 컴파일).
+- 빌드: 휴대폰 APK `0.5.6` (`apksigner verify` 통과, sha256 `52ff8c5d…07b00a`) → `../../deliverables/k8-ambient-phone-relay-0.5.6.apk`. K8 및 타 Gen5W 차종 실차 검증은 대기.
+
 ## 2026-11-20 범용 사제 엠비언트 등록(RGB 설정·실시간 테스트) — 휴대폰 0.5.5 (빌드 완료, 실차 확인 전)
 
 - 목적: 기존 하드코딩된 Lotus·Zengge 외에 다른 사제 BLE 엠비언트도 앱에서 쉽게 추가·연동할 수 있도록 지원.

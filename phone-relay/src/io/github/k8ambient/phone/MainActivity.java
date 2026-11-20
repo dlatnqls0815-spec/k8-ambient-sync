@@ -34,7 +34,7 @@ import android.widget.Toast;
 import io.github.k8ambient.core.ColorOrder;
 import io.github.k8ambient.core.CustomLampProfile;
 import io.github.k8ambient.core.CustomRgbTemplate;
-import io.github.k8ambient.core.DriveModeLight;
+import io.github.k8ambient.core.VehicleProfile;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Prefs prefs;
     private TextView status;
+    private Button vehicleProfileButton;
     private Button manageCustomButton;
     private EditText themeColor;
     private BluetoothAdapter adapter;
@@ -76,6 +77,10 @@ public final class MainActivity extends Activity {
         button(layout, "2. 차량 선택 (페어링된 기기)", new View.OnClickListener() {
             public void onClick(View v) { chooseCar(); }
         });
+        vehicleProfileButton = button(layout, "차종 프로필 선택", new View.OnClickListener() {
+            public void onClick(View v) { chooseVehicleProfile(); }
+        });
+        updateVehicleProfileLabel();
         button(layout, "3. 기본 조명 찾기 (8초, Lotus·Zengge)", new View.OnClickListener() {
             public void onClick(View v) { scanLamp(); }
         });
@@ -136,6 +141,18 @@ public final class MainActivity extends Activity {
         driveColorRow(layout, "에코 색 R,G,B", Prefs.DRIVE_ECO);
         driveColorRow(layout, "스포츠 색 R,G,B", Prefs.DRIVE_SPORT);
 
+        text(layout, "\n다른 차종 맞춤 설정 (K8 외 현대·기아·제네시스 Gen5W)");
+        button(layout, "밝기 원시값 범위 설정 (꺼짐/최소/최대·자동적응)", new View.OnClickListener() {
+            public void onClick(View v) { openBrightnessRangeDialog(); }
+        });
+        text(layout, "현재 차에서 수신된 드라이브 모드 코드(0x..)를 원터치로 역할에 지정:");
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        quickModeAssignButton(modeRow, "지금 코드→에코", VehicleProfile.ROLE_ECO, "에코");
+        quickModeAssignButton(modeRow, "지금 코드→스포츠", VehicleProfile.ROLE_SPORT, "스포츠");
+        quickModeAssignButton(modeRow, "지금 코드→일반", VehicleProfile.ROLE_NORMAL, "일반(사용자색)");
+        layout.addView(modeRow);
+
         text(layout, "\n부드러운 전환·색 톤 (움직이면 조명에 바로 반영)");
         slider(layout, "전환 시간", Prefs.FADE_MS, 0, 3000, 100, "ms");
         slider(layout, "색 깊이(감마 ×0.1, 높을수록 진하고 덜 하얗게)", Prefs.GAMMA, 10, 30, 1, "");
@@ -170,6 +187,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        updateVehicleProfileLabel();
         updateCustomButtonLabel();
         ui.post(refresh);
     }
@@ -177,6 +195,12 @@ public final class MainActivity extends Activity {
     @Override protected void onPause() {
         ui.removeCallbacks(refresh);
         super.onPause();
+    }
+
+    private void updateVehicleProfileLabel() {
+        if (vehicleProfileButton == null) return;
+        VehicleProfile p = prefs.vehicleProfile();
+        vehicleProfileButton.setText("차종 프로필: " + p.name + " (변경)");
     }
 
     private void updateCustomButtonLabel() {
@@ -209,9 +233,21 @@ public final class MainActivity extends Activity {
                 }
                 s.append('\n');
             }
+            VehicleProfile vp = prefs.vehicleProfile();
+            s.append("차종 프로필: ").append(vp.summary()).append('\n');
             s.append("순정 원시값: ").append(RelayStatus.raw).append('\n');
+            s.append("순정 밝기 원시값: ");
+            if (RelayStatus.brightnessRaw < 0) {
+                s.append("아직 모름");
+            } else {
+                int effMax = RelayStatus.effectiveMaxRaw > 0 ? RelayStatus.effectiveMaxRaw : vp.maxOnRaw;
+                s.append("raw=").append(RelayStatus.brightnessRaw)
+                        .append(" (범위 ").append(vp.minOnRaw).append("~").append(effMax)
+                        .append(", 꺼짐=").append(vp.offRaw < 0 ? "없음" : String.valueOf(vp.offRaw)).append(")");
+            }
+            s.append('\n');
             s.append("목표: ").append(RelayStatus.target).append('\n');
-            s.append("드라이브 모드: ").append(modeName(RelayStatus.driveMode))
+            s.append("드라이브 모드: ").append(vp.modeLabel(RelayStatus.driveMode))
                     .append(RelayStatus.driveLinked ? " (순정 연동 켜짐)" : " (순정 연동 꺼짐)").append('\n');
             s.append("마이 드라이브: ").append(RelayStatus.myDrive).append('\n');
             s.append("현재 테마: ").append(RelayStatus.themeKey == null ? "직접색 또는 없음" : RelayStatus.themeKey).append('\n');
@@ -231,10 +267,137 @@ public final class MainActivity extends Activity {
     };
 
     static String modeName(int mode) {
-        if (mode == DriveModeLight.ECO) return "에코";
-        if (mode == DriveModeLight.SPORT) return "스포츠";
-        if (mode == DriveModeLight.SMART) return "스마트";
-        return mode == 0 ? "아직 모름(바꾸면 표시)" : String.format("코드 %02x", mode);
+        return VehicleProfile.K8_GL3.modeLabel(mode);
+    }
+
+    private void chooseVehicleProfile() {
+        final List<VehicleProfile> presets = VehicleProfile.PRESETS;
+        String currentId = prefs.vehicleProfileId();
+        String[] labels = new String[presets.size()];
+        for (int i = 0; i < presets.size(); i++) {
+            VehicleProfile p = presets.get(i);
+            labels[i] = p.name + (p.id.equals(currentId) ? "  (현재)" : "") + "\n  " + p.description;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("차종 프로필 선택 (현대·기아·제네시스 Gen5W)")
+                .setItems(labels, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        VehicleProfile chosen = presets.get(which);
+                        prefs.selectVehicleProfile(chosen.id);
+                        updateVehicleProfileLabel();
+                        notifyProfileChanged();
+                        toast(chosen.name + " 적용 완료");
+                    }
+                })
+                .setNegativeButton("닫기", null)
+                .show();
+    }
+
+    private void quickModeAssignButton(LinearLayout row, String label, final String role, final String roleLabel) {
+        Button btn = new Button(this);
+        btn.setText(label);
+        btn.setAllCaps(false);
+        btn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        btn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                int code = RelayStatus.driveMode;
+                if (code <= 0) {
+                    toast("수신된 드라이브 모드 코드가 없습니다. 차에서 모드를 한 번 바꾼 뒤 눌러 주세요.");
+                    return;
+                }
+                prefs.assignDriveModeCode(role, code);
+                notifyProfileChanged();
+                toast("현재 코드 " + VehicleProfile.formatCode(code) + " → " + roleLabel + " 지정 완료");
+            }
+        });
+        row.addView(btn);
+    }
+
+    private void openBrightnessRangeDialog() {
+        VehicleProfile current = prefs.vehicleProfile();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(36, 20, 36, 12);
+
+        String currentRawText = RelayStatus.brightnessRaw < 0
+                ? "현재 수신된 순정 밝기 원시값: 없음 (중계 연결 후 순정 밝기를 움직여 확인)"
+                : "현재 수신된 순정 밝기 원시값: raw=" + RelayStatus.brightnessRaw;
+        text(box, currentRawText + "\n아래 빠른 선택을 누르거나 차종에 맞게 직접 입력하세요.");
+
+        final EditText offEdit = field(box, "꺼짐 원시값 (-1이면 꺼짐 없음, 예: 1 또는 0)", String.valueOf(current.offRaw));
+        offEdit.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        final EditText minEdit = field(box, "켜짐 최소 밝기 원시값 (예: 2 또는 1)", String.valueOf(current.minOnRaw));
+        minEdit.setInputType(InputType.TYPE_CLASS_NUMBER);
+        final EditText maxEdit = field(box, "켜짐 최대 밝기 원시값 (예: 11, 10 또는 100)", String.valueOf(current.maxOnRaw));
+        maxEdit.setInputType(InputType.TYPE_CLASS_NUMBER);
+
+        final CheckBox adaptiveCheck = new CheckBox(this);
+        adaptiveCheck.setText("범위 밖 원시값 자동 정규화·최대값 학습 (다른 차종 권장)");
+        adaptiveCheck.setChecked(current.allowAdaptiveRange);
+        box.addView(adaptiveCheck);
+
+        LinearLayout presetRow = new LinearLayout(this);
+        presetRow.setOrientation(LinearLayout.HORIZONTAL);
+        brightnessPresetButton(presetRow, "1~11 (K8·EV6)", 1, 2, 11, false, offEdit, minEdit, maxEdit, adaptiveCheck);
+        brightnessPresetButton(presetRow, "0~10", 0, 1, 10, true, offEdit, minEdit, maxEdit, adaptiveCheck);
+        brightnessPresetButton(presetRow, "0~100", 0, 1, 100, true, offEdit, minEdit, maxEdit, adaptiveCheck);
+        box.addView(presetRow);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("순정 밝기 원시값 범위 설정")
+                .setView(scroll)
+                .setPositiveButton("저장 및 적용", null)
+                .setNegativeButton("취소", null)
+                .create();
+        dialog.setOnShowListener(new DialogInterface.OnShowListener() {
+            public void onShow(DialogInterface d) {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        try {
+                            int off = Integer.parseInt(offEdit.getText().toString().trim());
+                            int min = Integer.parseInt(minEdit.getText().toString().trim());
+                            int max = Integer.parseInt(maxEdit.getText().toString().trim());
+                            prefs.setCustomBrightnessRange(off, min, max, adaptiveCheck.isChecked());
+                            notifyProfileChanged();
+                            toast("밝기 원시값 범위를 저장했습니다");
+                            dialog.dismiss();
+                        } catch (NumberFormatException error) {
+                            toast("숫자만 입력하세요 (예: 꺼짐 1, 최소 2, 최대 11)");
+                        } catch (IllegalArgumentException error) {
+                            toast("확인 필요: " + error.getMessage());
+                        }
+                    }
+                });
+            }
+        });
+        dialog.show();
+    }
+
+    private void brightnessPresetButton(LinearLayout row, String label, final int off, final int min, final int max,
+                                        final boolean adaptive, final EditText offEdit, final EditText minEdit,
+                                        final EditText maxEdit, final CheckBox adaptiveCheck) {
+        Button btn = new Button(this);
+        btn.setText(label);
+        btn.setAllCaps(false);
+        btn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        btn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                offEdit.setText(String.valueOf(off));
+                minEdit.setText(String.valueOf(min));
+                maxEdit.setText(String.valueOf(max));
+                adaptiveCheck.setChecked(adaptive);
+            }
+        });
+        row.addView(btn);
+    }
+
+    private void notifyProfileChanged() {
+        if (RelayStatus.running) {
+            startService(new Intent(this, RelayService.class).setAction(RelayService.ACTION_RELOAD_THEMES));
+        }
     }
 
     private void driveColorRow(LinearLayout layout, String label, final String key) {

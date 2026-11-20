@@ -19,7 +19,31 @@ import java.util.Map;
  * Not thread-safe; use from one thread.
  */
 public final class K8LotusMapping {
+    private final VehicleProfile profile;
     private final Map<String, int[]> themeColors = new HashMap<String, int[]>();
+    /** 자동 적응 모드에서 관측된 최대 밝기 원시값 (초기값은 profile.maxOnRaw). */
+    private int learnedMaxOnRaw;
+
+    /** 기존 K8 GL3 HEV 기본 프로필로 생성한다. */
+    public K8LotusMapping() {
+        this(VehicleProfile.K8_GL3);
+    }
+
+    /** 지정한 차종 프로필(밝기 범위·자동 적응 옵션 포함)로 생성한다. */
+    public K8LotusMapping(VehicleProfile profile) {
+        if (profile == null) throw new IllegalArgumentException("VehicleProfile is required");
+        this.profile = profile;
+        this.learnedMaxOnRaw = profile.maxOnRaw;
+    }
+
+    public VehicleProfile profile() {
+        return profile;
+    }
+
+    /** 현재 적용 중인 최대 밝기 원시값 (자동 적응 시 관측된 더 큰 값으로 확장). */
+    public int effectiveMaxOnRaw() {
+        return learnedMaxOnRaw;
+    }
 
     /** Theme key: the six raw channel bytes as lower-case hex, e.g. {@code 016b015a0195}. */
     public static String themeKey(SmlStatus status) {
@@ -42,11 +66,33 @@ public final class K8LotusMapping {
         themeColors.remove(key);
     }
 
-    /** Returns the target state, or null when the brightness value is outside the known range. */
+    /** Returns the target state, or null when the brightness value is outside the known range (non-adaptive). */
     public AmbientState map(SmlStatus status) {
         if (status == null) throw new IllegalArgumentException("Status is required");
         int raw = status.brightnessRaw;
-        if (raw < 1 || raw > 11) return null;
+        boolean on;
+        int brightness;
+
+        if (profile.offRaw >= 0 && raw == profile.offRaw) {
+            on = false;
+            brightness = 0;
+        } else if (raw >= profile.minOnRaw && raw <= learnedMaxOnRaw) {
+            on = true;
+            brightness = normalizeBrightness(raw, profile.minOnRaw, learnedMaxOnRaw);
+        } else if (profile.allowAdaptiveRange) {
+            if (raw < profile.minOnRaw) {
+                on = false;
+                brightness = 0;
+            } else {
+                // 관측된 raw가 기존 최대값보다 크면 안전하게 상한을 확장 학습해 비례 정규화한다.
+                learnedMaxOnRaw = raw;
+                on = true;
+                brightness = normalizeBrightness(raw, profile.minOnRaw, learnedMaxOnRaw);
+            }
+        } else {
+            return null;
+        }
+
         int[] color;
         if (isDirectColor(status)) {
             color = new int[] {status.redRaw, status.greenRaw, status.blueRaw};
@@ -55,7 +101,15 @@ public final class K8LotusMapping {
             if (assigned != null) color = assigned.clone();
             else color = new int[] {status.redRaw & 255, status.greenRaw & 255, status.blueRaw & 255};
         }
-        boolean on = raw != 1;
-        return new AmbientState(color[0], color[1], color[2], on ? (raw - 1) * 10 : 0, on);
+        return new AmbientState(color[0], color[1], color[2], brightness, on);
+    }
+
+    private static int normalizeBrightness(int raw, int minOnRaw, int maxOnRaw) {
+        int steps = maxOnRaw - minOnRaw + 1;
+        if (steps <= 1) return 100;
+        int pct = ((raw - minOnRaw + 1) * 100 + steps / 2) / steps;
+        if (pct < 1) return 1;
+        if (pct > 100) return 100;
+        return pct;
     }
 }
