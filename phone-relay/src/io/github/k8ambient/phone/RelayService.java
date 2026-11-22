@@ -26,6 +26,7 @@ import io.github.k8ambient.core.HueBrightness;
 import io.github.k8ambient.core.K8LotusMapping;
 import io.github.k8ambient.core.RelayProtocol;
 import io.github.k8ambient.core.SmlStatus;
+import io.github.k8ambient.core.SportBaseColor;
 import io.github.k8ambient.core.SyncEngine;
 import io.github.k8ambient.core.VehicleProfile;
 import io.github.k8ambient.core.ZenggeFrames;
@@ -308,6 +309,9 @@ public final class RelayService extends Service {
                 backoff = 3000;
                 BufferedReader reader = new BufferedReader(new InputStreamReader(opened.getInputStream(), "US-ASCII"));
                 SmlStatus lastNormalStatus = null;
+                // Base color without the My Drive Auto sport red, for the end of a camera alert.
+                SportBaseColor sportBase = new SportBaseColor();
+                sportBase.onDriveMode(driveMode);
                 boolean warning = false;
                 String line;
                 while (!stopping && (line = reader.readLine()) != null) {
@@ -324,6 +328,7 @@ public final class RelayService extends Service {
                     if (mode != null) {
                         DiagLog.event("rx", line.trim());
                         driveMode = mode.intValue();
+                        sportBase.onDriveMode(driveMode);
                         RelayStatus.driveMode = driveMode;
                         if (!warning && lastNormalStatus != null)
                             handleStatus(profile, mapping, driveLight, driveMode, lastNormalStatus, false);
@@ -332,6 +337,7 @@ public final class RelayService extends Service {
                     int[] feedback = RelayProtocol.decodeMyDrive(line);
                     if (feedback != null) {
                         DiagLog.event("rx", line.trim());
+                        sportBase.onMyDrive(feedback);
                         RelayStatus.myDrive = RelayStatus.stamp("엔진 " + feedback[0] + " / 서스 " + feedback[1]
                                 + " / 핸들 " + feedback[2]);
                         continue;
@@ -344,8 +350,15 @@ public final class RelayService extends Service {
                         RelayStatus.target = RelayStatus.stamp(warning ? "과속 카메라 경고 시작" : "과속 카메라 경고 끝");
                         // Restore promptly even if the relay deduplicates the next normal SML.
                         // If we joined mid-alert, wait for the first normal SML instead.
-                        if (ended && lastNormalStatus != null)
-                            handleStatus(profile, mapping, driveLight, driveMode, lastNormalStatus, false);
+                        if (ended && lastNormalStatus != null) {
+                            // A sport red kept from before the alert is stale once sport ended during it.
+                            SmlStatus restore = sportBase.afterAlert(lastNormalStatus);
+                            if (restore != lastNormalStatus) {
+                                DiagLog.event("alert", "경고 끝: 스포츠가 끝나 기본색으로 복귀");
+                                lastNormalStatus = restore;
+                            }
+                            handleStatus(profile, mapping, driveLight, driveMode, restore, false);
+                        }
                         continue;
                     }
                     byte[] raw;
@@ -354,7 +367,10 @@ public final class RelayService extends Service {
                     if (raw == null) continue;
                     DiagLog.event("rx", line.trim());
                     SmlStatus status = SmlStatus.parse(raw);
-                    if (!warning) lastNormalStatus = status;
+                    if (!warning) {
+                        lastNormalStatus = status;
+                        sportBase.onNormalStatus(status);
+                    }
                     handleStatus(profile, mapping, driveLight, driveMode, status, warning);
                 }
                 RelayStatus.car("연결 끊김");

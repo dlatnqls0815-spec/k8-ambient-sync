@@ -1178,7 +1178,53 @@ public final class TestMain {
         rejects(new Action() { public void run() { new DriveModeLight().setModeColor(0, 1, 2, 3); } });
     }
 
+    private static SmlStatus sml(String hex) {
+        byte[] b = new byte[hex.length() / 2];
+        for (int i = 0; i < b.length; i++) b[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+        return SmlStatus.parse(b);
+    }
+
+    private static void sportBaseColor() {
+        SmlStatus purple = sml("00a9002300ef0b0101");
+        SmlStatus red = sml("00fa000400510b0101");
+        SmlStatus oldRed = sml("00ff000000000b0101");
+        SportBaseColor s = new SportBaseColor();
+        s.onDriveMode(DriveModeLight.SMART);
+        s.onMyDrive(new int[] {4, 2, 2});
+        check(!s.sportActive(), "my drive eco is not sport");
+        s.onNormalStatus(purple);
+        check(s.base() == purple, "normal color becomes base");
+        s.onMyDrive(new int[] {5, 2, 2});
+        check(s.sportActive(), "engine sport in my drive");
+        s.onNormalStatus(red);
+        check(s.base() == purple, "module sport red is not the base");
+        check(SportBaseColor.isSportRed(oldRed) && !SportBaseColor.isSportRed(purple), "known sport reds");
+        // Alert while sport, sport ends during the alert: restore the base, not the stale red.
+        s.onMyDrive(new int[] {4, 2, 2});
+        check(s.afterAlert(red) == purple, "alert end after sport ended -> base color");
+        // Still sport when the alert ends: keep the red.
+        s.onMyDrive(new int[] {4, 5, 2});
+        check(s.afterAlert(red) == red, "alert end while still sport -> red");
+        // A real new color (not sport red) is shown as is.
+        s.onMyDrive(new int[] {4, 2, 2});
+        SmlStatus green = sml("000a00f000100b0101");
+        check(s.afterAlert(green) == green, "non-red last status is kept");
+        // Red chosen by the user outside sport is a normal base color.
+        s.onNormalStatus(red);
+        check(s.base() == red, "user red outside sport is the base");
+        // Stock sport mode counts as sport; unknown base falls back to the last status.
+        SportBaseColor fresh = new SportBaseColor();
+        fresh.onDriveMode(DriveModeLight.SPORT);
+        check(fresh.sportActive() && fresh.afterAlert(red) == red, "stock sport keeps red");
+        fresh.onDriveMode(DriveModeLight.ECO);
+        check(fresh.afterAlert(red) == red, "no base yet -> last status");
+        fresh.onNormalStatus(null);
+        fresh.onMyDrive(null);
+        check(!fresh.sportActive(), "eco without feedback is not sport");
+    }
+
     public static void main(String[] args) {
+        sportBaseColor();
         wifiKeeperPolicy();
         customRgbTemplate();
         customLampProfile();
