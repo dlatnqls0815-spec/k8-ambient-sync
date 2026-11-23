@@ -21,7 +21,7 @@ A안(헤드유닛 직접 BLE)은 스택에 GATT 클라이언트가 없어 **종�
 | 휴대폰 `io.github.k8ambient.phone` (Galaxy Z Fold) | **0.5.2** (code 20, 내용은 0.4.8과 같음 — ESP32 기능 제거), 2026-11-18 USB 설치 | `../../deliverables/k8-ambient-phone-relay-0.5.2.apk` |
 | 차량 NEMESIS `k8ambient.relay` · 휴대폰 | **0.4.4 · 0.5.3** (마이 드라이브 스포츠 빨강 옵션, 2026-11-20 05:04 설치, dex md5 `5ea79eb6…2c1894` 확인, 휴대폰 재연결 확인). 옵션 동작은 실차 미확인 | `private/nemesis-relay/k8ambient.relay-0.4.4.zip`, `../../deliverables/k8-ambient-phone-relay-0.5.3.apk` |
 | 차량 NEMESIS `k8ambient.relay` | **0.4.5** (마이 드라이브 RGB를 순정 상태 응답으로 받음, 2026-11-23 06:24 설치, dex md5 `fad87ff6…7681d2` 확인, 중계 1개 실행, 휴대폰 재연결 확인). 휴대폰은 0.5.3 그대로 | `private/nemesis-relay/k8ambient.relay-0.4.5.zip` |
-| 휴대폰 (설치 대기) | **0.5.7** (code 25, 과속 경고가 끝날 때 스포츠가 이미 끝났으면 스포츠 빨강 대신 기본색으로 복귀, 2026-11-23 빌드, 미설치) | `../../deliverables/k8-ambient-phone-relay-0.5.7.apk` |
+| 휴대폰 `io.github.k8ambient.phone` | **0.5.7** (code 25, 과속 경고가 끝날 때 스포츠가 이미 끝났으면 스포츠 빨강 대신 기본색으로 복귀, 2026-11-23 20:48 USB 설치, 차량 중계 재연결 확인, 실차 경고 상황은 미확인) | `../../deliverables/k8-ambient-phone-relay-0.5.7.apk` |
 
 0.4.4는 시동 점등 페이드, 과속 경고 종료 후 복귀 페이드, Zengge의 평소 색 즉시 전송과 경고 전송 수 표시를 포함한다.
 0.4.6은 시동 직후 차량 재접속 대기(최대 30초)를 없앴다(차량 ACL 연결 시 즉시 재시도). 0.4.5는 시동 뒤 Lotus가 수십 초 반응하지 않던 문제(혼잡 쓰기에 링크를 끊고, 남은 링크에 바로 재연결)를 고쳤다. 시동 재시험은 아직.
